@@ -1,0 +1,315 @@
+<Window x:Class="eyesharp.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EyeSharp 护眼助手"
+        Width="650"
+        Height="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}"
+        ResizeMode="CanMinimize">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="EyeSharp 护眼助手"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="定时提醒休息，保护您的眼睛"
+                       FontSize="14"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <!-- 主内容区域 -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+            <!-- 状态显示区域 -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20"
+                    Margin="0,0,0,15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 状态文本 -->
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding StatusText}"
+                               FontSize="16"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,10"/>
+
+                    <!-- 倒计时显示 -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="距离下次休息："
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{Binding CountdownText}"
+                                       FontSize="28"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource PrimaryBrush}"
+                                       Margin="10,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- 暂停/恢复按钮 -->
+                        <Button Grid.Column="2"
+                                Content="{Binding PauseResumeButtonText}"
+                                Command="{Binding PauseResumeCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Width="100"
+                                Height="36"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- 时间设置区域 -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20"
+                    Margin="0,0,0,15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="时间设置"
+                               FontSize="16"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,15"/>
+
+                    <!-- 休息间隔设置 -->
+                    <Grid Grid.Row="1" Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="休息间隔："
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                        <Slider Grid.Column="1"
+                                Minimum="1"
+                                Maximum="120"
+                                Value="{Binding RestIntervalMinutes}"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding IsSettingsEnabled}"/>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBox Text="{Binding RestIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="50"
+                                     VerticalAlignment="Center"
+                                     Style="{StaticResource TextBoxStyle}"
+                                     IsEnabled="{Binding IsSettingsEnabled}"/>
+                            <TextBlock Text=" 分钟"
+                                       VerticalAlignment="Center"
+                                       Margin="5,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 休息时长设置 -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="休息时长："
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                        <Slider Grid.Column="1"
+                                Minimum="5"
+                                Maximum="300"
+                                Value="{Binding RestDurationSeconds}"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding IsSettingsEnabled}"/>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBox Text="{Binding RestDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="50"
+                                     VerticalAlignment="Center"
+                                     Style="{StaticResource TextBoxStyle}"
+                                     IsEnabled="{Binding IsSettingsEnabled}"/>
+                            <TextBlock Text=" 秒"
+                                       VerticalAlignment="Center"
+                                       Margin="5,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 应用按钮 -->
+                    <Button Grid.Row="3"
+                            Content="应用设置"
+                            Command="{Binding ApplySettingsCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,0,0"
+                            Width="100"/>
+                </Grid>
+            </Border>
+
+            <!-- 其他设置区域 -->
+            <Border Grid.Row="2"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20"
+                    Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="其他设置"
+                               FontSize="16"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,15"/>
+
+                    <!-- 强制模式 -->
+                    <Grid Margin="0,0,0,10">
+                        <CheckBox Content="强制休息模式"
+                                  IsChecked="{Binding IsForcedMode}"
+                                  FontSize="14"
+                                  Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <!-- 休息窗口模式 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="休息窗口："
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <RadioButton Content="黑屏"
+                                         GroupName="RestWindowMode"
+                                         IsChecked="{Binding IsBlackMode}"
+                                         Margin="0,0,20,0"
+                                         FontSize="14"/>
+                            <RadioButton Content="图片轮播"
+                                         GroupName="RestWindowMode"
+                                         IsChecked="{Binding IsImageMode}"
+                                         FontSize="14"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 自定义图片路径 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="图片文件夹："
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding CustomImagePath}"
+                                 VerticalAlignment="Center"
+                                 IsReadOnly="True"
+                                 Style="{StaticResource TextBoxStyle}"/>
+
+                        <Button Grid.Column="2"
+                                Content="浏览..."
+                                Command="{Binding BrowseImageCommand}"
+                        Width="80"
+                                Height="32"
+                                Margin="10,0,0,0"/>
+                    </Grid>
+
+                    <!-- 开机自启动 -->
+                    <Grid>
+                        <CheckBox Content="开机自启动"
+                                  IsChecked="{Binding AutoStart}"
+                                  FontSize="14"
+                                  Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 操作按钮区域 -->
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="1"
+                        Content="修改密码"
+                        Command="{Binding ChangePasswordCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="100"
+                        Height="36"
+                        Margin="0,0,10,0"/>
+
+                <Button Grid.Column="2"
+                        Content="退出程序"
+                        Command="{Binding ExitCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="100"
+                        Height="36"/>
+            </Grid>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- 底部信息 -->
+        <TextBlock Grid.Row="2"
+                   Text="{Binding VersionInfo}"
+                   FontSize="12"
+                   Foreground="{StaticResource TextDisabledBrush}"
+                   HorizontalAlignment="Center"
+                   Margin="0,20,0,0"/>
+    </Grid>
+</Window>

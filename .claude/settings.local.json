@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__web-search-prime__webSearchPrime",
+      "Bash(dotnet:*)",
+      "Bash(powershell:*)",
+      "Bash(dir:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(\"bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\eyesharp.exe\")",
+      "Bash(start \"\" \"bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\eyesharp.exe\")",
+      "Bash(taskkill:*)",
+      "mcp__zai-mcp-server__diagnose_error_screenshot",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(timeout:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(Select-String:*)",
+      "mcp__zai-mcp-server__analyze_image",
+      "Bash(cmd:*)",
+      "Bash(wmic:*)",
+      "Bash(\"D:\\\\java\\\\ClaudeCode\\\\eyesharp\\\\bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\eyesharp.exe\")",
+      "Bash(iconv:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- <ApplicationIcon>Resources\app.ico</ApplicationIcon> -->
+    <AssemblyName>eyesharp</AssemblyName>
+    <RootNamespace>eyesharp</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>eyesharp</Authors>
+    <Company>eyesharp</Company>
+    <Product>EyeSharp Eye Care</Product>
+    <Description>定时提醒休息应用程序 - 护眼助手</Description>
+    <Copyright>Copyright © 2025 eyesharp</Copyright>
+
+    <!-- 自包含发布配置 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- 中文资源支持 -->
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MVVM 框架 -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <!-- 系统托盘图标 -->
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.0.0" />
+    <!-- 日志框架 -->
+    <PackageReference Include="NLog" Version="5.3.2" />
+    <PackageReference Include="NLog.Extensions.Logging" Version="5.3.2" />
+    <!-- 依赖注入 -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 资源文件 -->
+    <EmbeddedResource Include="Resources\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NLog 配置文件 -->
+    <Content Include="NLog.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

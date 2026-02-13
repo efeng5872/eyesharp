@@ -1,0 +1,126 @@
+<Window x:Class="eyesharp.Views.RestWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Black"
+        WindowState="Normal">
+
+    <Grid>
+        <!-- 背景图片/纯黑 -->
+        <Grid x:Name="BackgroundGrid">
+            <!-- 黑屏模式 -->
+            <Grid.Background>
+                <SolidColorBrush Color="Black" x:Name="BackgroundBrush"/>
+            </Grid.Background>
+
+            <!-- 图片模式（默认隐藏） -->
+            <Image x:Name="BackgroundImage"
+                   Stretch="UniformToFill"
+                   Visibility="Collapsed"/>
+        </Grid>
+
+        <!-- 右下角控制区 -->
+        <StackPanel HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="20"
+                    Orientation="Horizontal">
+            <!-- 强制模式：密码输入 -->
+            <StackPanel x:Name="ForcedModePanel"
+                        Orientation="Horizontal"
+                        Visibility="Collapsed">
+                <TextBlock Text="密码:"
+                           FontSize="14"
+                           Foreground="#808080"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+                <PasswordBox x:Name="PasswordBox"
+                             FontSize="14"
+                             Width="150"
+                             Height="30"
+                             VerticalAlignment="Center"
+                             Margin="0,0,10,0"
+                             KeyDown="OnPasswordKeyDown"/>
+                <Button Content="提前结束"
+                        Click="OnEndRestClick"
+                        Width="80"
+                        Height="30"
+                        FontSize="14"
+                        Background="#404040"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="0,0,20,0">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="4"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#606060"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+
+            <!-- 非强制模式：跳过休息按钮 -->
+            <Button x:Name="SkipRestButton"
+                    Content="跳过休息"
+                    Click="OnSkipRestClick"
+                    Width="80"
+                    Height="30"
+                    FontSize="14"
+                    Background="#404040"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    Visibility="Collapsed"
+                    Margin="0,0,20,0">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="4"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#606060"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+
+            <!-- 倒计时显示 -->
+            <TextBlock x:Name="CountdownText"
+                       Text="00:20"
+                       FontSize="32"
+                       FontWeight="Bold"
+                       Foreground="White"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</Window>

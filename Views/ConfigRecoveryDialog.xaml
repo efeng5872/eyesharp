@@ -1,0 +1,91 @@
+<Window x:Class="eyesharp.Views.ConfigRecoveryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="配置恢复 - EyeSharp"
+        Width="450"
+        Height="250"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStyle="SingleBorderWindow"
+        ShowInTaskbar="False">
+
+    <Border Margin="30"
+            Background="{StaticResource CardBackgroundBrush}"
+            BorderBrush="{StaticResource WarningBrush}"
+            BorderThickness="2"
+            CornerRadius="8">
+        <Grid Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 警告图标和标题 -->
+            <Grid Grid.Row="0" Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="⚠"
+                           FontSize="32"
+                           Foreground="{StaticResource WarningBrush}"
+                           Margin="0,0,15,0"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="配置文件损坏"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource WarningBrush}"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- 说明文字 -->
+            <StackPanel Grid.Row="1">
+                <TextBlock Text="检测到配置文件已损坏或格式不正确。"
+                           FontSize="14"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Margin="0,0,0,10"/>
+
+                <TextBlock Text="程序将自动恢复为默认配置："
+                           FontSize="14"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,0,5"/>
+
+                <TextBlock Text="• 休息间隔：30 分钟"
+                           FontSize="13"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="20,0,0,0"/>
+
+                <TextBlock Text="• 休息时长：20 秒"
+                           FontSize="13"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="20,0,0,0"/>
+
+                <TextBlock Text="• 强制模式：启用"
+                           FontSize="13"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="20,0,0,0"/>
+
+                <TextBlock Text="您可以在程序启动后重新调整这些设置。"
+                           FontSize="13"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,10,0,0"
+                           FontStyle="Italic"/>
+            </StackPanel>
+
+            <!-- 确定按钮 -->
+            <Button Grid.Row="2"
+                    Content="确定"
+                    Click="OnOkClick"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    HorizontalAlignment="Center"
+                    Width="100"
+                    Height="36"
+                    Margin="0,20,0,0"/>
+        </Grid>
+    </Border>
+</Window>

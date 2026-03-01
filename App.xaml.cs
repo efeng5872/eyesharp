@@ -34,7 +34,7 @@ namespace eyesharp
         /// <summary>
         /// 应用程序启动
         /// </summary>
-        private void Application_Startup(object sender, StartupEventArgs e)
+        private async void Application_Startup(object sender, StartupEventArgs e)
         {
             // 检查单实例
             if (!CheckSingleInstance())
@@ -44,10 +44,13 @@ namespace eyesharp
                 return;
             }
 
+            // 设置为显式关闭模式，防止对话框关闭时自动退出
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             // 配置服务
             ConfigureServices();
 
-            // 同步加载配置
+            // 异步加载配置
             try
             {
                 var configService = GetConfigService();
@@ -62,29 +65,39 @@ namespace eyesharp
                 // 订阅配置损坏事件
                 configService.ConfigCorrupted += OnConfigCorrupted;
 
-                // 同步加载配置（使用 Task.Run 避免死锁）
-                _currentConfig = Task.Run(() => configService.LoadConfigAsync()).GetAwaiter().GetResult();
+                // 异步加载配置
+                _currentConfig = await configService.LoadConfigAsync();
 
-                // 延迟初始化日志服务（避免死锁）
+                // 延迟初始化日志服务
                 var logService = ServiceProvider.GetService<ILogService>();
 
                 // 记录启动日志
                 logService?.Info("应用程序启动");
 
                 // 设置日志级别
+                logService?.Info("准备设置日志级别");
                 logService?.SetLogLevel(_currentConfig.LogLevel);
+                logService?.Info("日志级别设置完成");
 
                 // 清理旧日志
+                logService?.Info("准备清理旧日志");
                 var logCleanupService = ServiceProvider.GetService<LogCleanupService>();
                 logCleanupService?.CleanupOldLogs();
+                logService?.Info("旧日志清理完成");
 
                 // 检查是否首次启动（密码未设置）
+                logService?.Info("准备检查密码服务");
                 var passwordService = ServiceProvider.GetService<IPasswordService>();
+                logService?.Info($"密码服务获取成功，密码哈希长度: {_currentConfig.PasswordHash?.Length ?? 0}");
 
+                logService?.Info("检查密码是否已设置");
                 if (passwordService != null && !passwordService.IsPasswordSet(_currentConfig.PasswordHash))
                 {
+                    logService?.Info("密码未设置，准备显示密码设置对话框");
                     // 首次启动，显示密码设置对话框
-                    bool? passwordSetResult = ShowPasswordDialog();
+                    logService?.Info("即将调用 ShowPasswordDialogAsync()");
+                    bool? passwordSetResult = await ShowPasswordDialogAsync();
+                    logService?.Info($"密码设置对话框关闭，结果: {passwordSetResult.HasValue}, 值: {passwordSetResult.GetValueOrDefault()}");
                     if (passwordSetResult != true)
                     {
                         // 用户取消密码设置，退出程序
@@ -92,13 +105,31 @@ namespace eyesharp
                         Shutdown();
                         return;
                     }
+
+                    // 重新加载配置以获取保存的密码哈希
+                    logService?.Info("重新加载配置");
+                    _currentConfig = await configService.LoadConfigAsync();
+                    logService?.Info($"配置重新加载成功，密码哈希长度: {_currentConfig.PasswordHash?.Length ?? 0}");
                 }
 
                 // 创建并显示主窗口
                 var timerService = ServiceProvider.GetService<ITimerService>();
+                logService?.Info("开始创建 MainViewModel");
                 var mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, _currentConfig);
+                logService?.Info("MainViewModel 创建成功");
+
                 var mainWindow = new MainWindow(mainViewModel);
+                logService?.Info("MainWindow 创建成功，准备显示");
+
+                logService?.Info("即将调用 mainWindow.Show()");
                 mainWindow.Show();
+                logService?.Info("mainWindow.Show() 已调用");
+
+                // 主窗口已显示，设置为主窗口关闭模式
+                ShutdownMode = ShutdownMode.OnMainWindowClose;
+                logService?.Info("ShutdownMode 已设置为 OnMainWindowClose");
+
+                logService?.Info("Application_Startup 方法即将完成");
             }
             catch (Exception ex)
             {
@@ -192,12 +223,16 @@ namespace eyesharp
         /// <summary>
         /// 显示密码设置对话框
         /// </summary>
-        private bool? ShowPasswordDialog()
+        private async Task<bool?> ShowPasswordDialogAsync()
         {
             try
             {
+                var showPwdDialogLogService = ServiceProvider.GetService<ILogService>();
+                showPwdDialogLogService?.Info("ShowPasswordDialog: 开始创建对话框");
                 var dialog = new SetPasswordDialog();
+                showPwdDialogLogService?.Info("ShowPasswordDialog: 对话框已创建，准备显示");
                 var result = dialog.ShowDialog();
+                showPwdDialogLogService?.Info($"ShowPasswordDialog: ShowDialog() 返回，结果: {result}");
 
                 if (result == true)
                 {
@@ -213,18 +248,15 @@ namespace eyesharp
                     {
                         var passwordHash = passwordService.HashPassword(dialog.Password);
                         _currentConfig!.PasswordHash = passwordHash;
+                        showPwdDialogLogService?.Info($"密码哈希生成成功，长度: {passwordHash?.Length ?? 0}");
 
-                        // 保存配置
+                        // 异步保存配置
                         var configService = ServiceProvider.GetService<IConfigService>();
                         if (configService != null)
                         {
-                            configService.SaveConfigAsync(_currentConfig).Wait();
-
-                            var logService = ServiceProvider.GetService<ILogService>();
-                            logService?.Info("首次启动密码设置成功");
-
-                            MessageBox.Show("密码设置成功！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
-
+                            showPwdDialogLogService?.Info("开始保存配置");
+                            await configService.SaveConfigAsync(_currentConfig);
+                            showPwdDialogLogService?.Info("首次启动密码设置成功");
                             return true;
                         }
                         else
@@ -242,11 +274,14 @@ namespace eyesharp
                 else
                 {
                     // 用户取消
+                    showPwdDialogLogService?.Info("用户取消密码设置");
                     return false;
                 }
             }
             catch (Exception ex)
             {
+                var logService = ServiceProvider.GetService<ILogService>();
+                logService?.Error($"ShowPasswordDialog 异常: {ex.Message}");
                 MessageBox.Show($"密码设置失败：{ex.Message}\n\n{ex.StackTrace}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }

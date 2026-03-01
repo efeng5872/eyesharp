@@ -77,5 +77,84 @@ namespace eyesharp.Services
 
             return true;
         }
+
+        /// <summary>
+        /// 获取密码强度信息
+        /// </summary>
+        public PasswordStrength GetPasswordStrength(string password)
+        {
+            if (password == null)
+                throw new ArgumentNullException(nameof(password));
+
+            var strength = new PasswordStrength();
+
+            // 检查长度
+            if (password.Length < 4)
+            {
+                strength.Level = 0;
+                strength.Description = "太短";
+                strength.Message = "密码长度至少4个字符";
+                return strength;
+            }
+
+            if (password.Length > 20)
+            {
+                strength.Level = 0;
+                strength.Description = "太长";
+                strength.Message = "密码长度不能超过20个字符";
+                return strength;
+            }
+
+            // 计算强度
+            int score = 0;
+
+            // 长度得分
+            if (password.Length >= 6) score++;
+            if (password.Length >= 8) score++;
+            if (password.Length >= 12) score++;
+
+            // 字符类型得分
+            bool hasLower = false;
+            bool hasUpper = false;
+            bool hasDigit = false;
+            bool hasSpecial = false;
+
+            foreach (char c in password)
+            {
+                if (char.IsLower(c)) hasLower = true;
+                else if (char.IsUpper(c)) hasUpper = true;
+                else if (char.IsDigit(c)) hasDigit = true;
+                else hasSpecial = true;
+            }
+
+            int charTypes = (hasLower ? 1 : 0) +
+                           (hasUpper ? 1 : 0) +
+                           (hasDigit ? 1 : 0) +
+                           (hasSpecial ? 1 : 0);
+
+            score += charTypes;
+
+            // 判定强度等级
+            if (score <= 3)
+            {
+                strength.Level = 1;
+                strength.Description = "弱";
+                strength.Message = "建议使用更复杂的密码";
+            }
+            else if (score <= 5)
+            {
+                strength.Level = 2;
+                strength.Description = "中";
+                strength.Message = "密码强度中等";
+            }
+            else
+            {
+                strength.Level = 3;
+                strength.Description = "强";
+                strength.Message = "密码强度很好";
+            }
+
+            return strength;
+        }
     }
 }

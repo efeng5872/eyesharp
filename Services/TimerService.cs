@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using eyesharp.Models;
 using eyesharp.Helpers;
 
@@ -97,13 +98,17 @@ namespace eyesharp.Services
             {
                 _mainCountdownRemaining = (int)duration.TotalSeconds;
                 State = TimerState.Running;
-
-                // 启动定时器，每1000毫秒触发一次
-                _timer?.Change(0, 1000);
-
-                // 立即触发一次Tick，显示初始值
-                OnMainCountdownTick();
             }
+
+            // 在锁外启动定时器，避免死锁
+            _timer?.Change(0, 1000);
+
+            // 使用 Task.Run 延迟触发 Tick，避免死锁
+            Task.Run(() =>
+            {
+                Task.Delay(50).Wait();  // 等待 50ms
+                OnMainCountdownTick();
+            });
         }
 
         /// <summary>
@@ -158,13 +163,17 @@ namespace eyesharp.Services
             {
                 _restCountdownRemaining = (int)duration.TotalSeconds;
                 State = TimerState.Resting;
-
-                // 启动定时器，每1000毫秒触发一次
-                _timer?.Change(0, 1000);
-
-                // 立即触发一次Tick，显示初始值
-                OnRestCountdownTick();
             }
+
+            // 在锁外启动定时器，避免死锁
+            _timer?.Change(0, 1000);
+
+            // 使用 Task.Run 延迟触发 Tick，避免死锁
+            Task.Run(() =>
+            {
+                Task.Delay(50).Wait();  // 等待 50ms
+                OnRestCountdownTick();
+            });
         }
 
         /// <summary>

@@ -26,11 +26,26 @@ namespace eyesharp.Services
         public event EventHandler<ConfigCorruptedEventArgs>? ConfigCorrupted;
 
         public ConfigService(ILogService logService)
+            : this(logService, AppDomain.CurrentDomain.BaseDirectory)
         {
-            _configDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            _logService = logService;
+        }
 
-            _jsonOptions = new JsonSerializerOptions
+        /// <summary>
+        /// 构造函数（用于测试）
+        /// </summary>
+        public ConfigService(ILogService logService, string configDirectory)
+        {
+            _configDirectory = configDirectory;
+            _logService = logService;
+            _jsonOptions = CreateJsonOptions();
+        }
+
+        /// <summary>
+        /// 创建 JSON 序列化选项
+        /// </summary>
+        private static JsonSerializerOptions CreateJsonOptions()
+        {
+            return new JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -147,6 +162,9 @@ namespace eyesharp.Services
         /// </summary>
         private static void ValidateAndFixConfig(AppConfig config)
         {
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
+
             // 休息间隔：1-120 分钟
             if (config.RestIntervalMinutes < 1)
                 config.RestIntervalMinutes = 1;

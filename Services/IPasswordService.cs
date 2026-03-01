@@ -24,5 +24,10 @@ namespace eyesharp.Services
         /// 验证密码强度
         /// </summary>
         bool ValidatePasswordStrength(string password);
+
+        /// <summary>
+        /// 获取密码强度信息
+        /// </summary>
+        Models.PasswordStrength GetPasswordStrength(string password);
     }
 }

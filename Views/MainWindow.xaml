@@ -34,7 +34,6 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
             <!-- 状态显示区域 -->
@@ -89,7 +88,7 @@
                 </Grid>
             </Border>
 
-            <!-- 时间设置区域 -->
+            <!-- 提醒设置区域（合并时间设置和其他设置） -->
             <Border Grid.Row="1"
                     Background="{StaticResource CardBackgroundBrush}"
                     BorderBrush="{StaticResource BorderBrush}"
@@ -103,10 +102,14 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="时间设置"
+                               Text="提醒设置"
                                FontSize="16"
                                FontWeight="Medium"
                                Foreground="{StaticResource TextPrimaryBrush}"
@@ -147,7 +150,7 @@
                     </Grid>
 
                     <!-- 休息时长设置 -->
-                    <Grid Grid.Row="2">
+                    <Grid Grid.Row="2" Margin="0,0,0,15">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="*"/>
@@ -180,42 +183,19 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- 应用按钮 -->
-                    <Button Grid.Row="3"
-                            Content="应用设置"
-                            Command="{Binding ApplySettingsCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            HorizontalAlignment="Right"
-                            Margin="0,10,0,0"
-                            Width="100"/>
-                </Grid>
-            </Border>
-
-            <!-- 其他设置区域 -->
-            <Border Grid.Row="2"
-                    Background="{StaticResource CardBackgroundBrush}"
-                    BorderBrush="{StaticResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20"
-                    Margin="0,0,0,15">
-                <StackPanel>
-                    <TextBlock Text="其他设置"
-                               FontSize="16"
-                               FontWeight="Medium"
-                               Foreground="{StaticResource TextPrimaryBrush}"
-                               Margin="0,0,0,15"/>
+                    <!-- 分隔线 -->
+                    <Separator Grid.Row="3" Margin="0,0,0,15" Background="{StaticResource BorderBrush}"/>
 
                     <!-- 强制模式 -->
-                    <Grid Margin="0,0,0,10">
-                        <CheckBox Content="强制休息模式"
+                    <Grid Grid.Row="4" Margin="0,0,0,10">
+                        <CheckBox Content="强制休息模式（需输入密码才能提前结束休息）"
                                   IsChecked="{Binding IsForcedMode}"
                                   FontSize="14"
                                   Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <!-- 休息窗口模式 -->
-                    <Grid Margin="0,0,0,10">
+                    <Grid Grid.Row="5" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="*"/>
@@ -241,7 +221,7 @@
                     </Grid>
 
                     <!-- 自定义图片路径 -->
-                    <Grid Margin="0,0,0,10">
+                    <Grid Grid.Row="6" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="*"/>
@@ -263,25 +243,37 @@
                         <Button Grid.Column="2"
                                 Content="浏览..."
                                 Command="{Binding BrowseImageCommand}"
-                        Width="80"
+                                Width="80"
                                 Height="32"
                                 Margin="10,0,0,0"/>
                     </Grid>
 
                     <!-- 开机自启动 -->
-                    <Grid>
+                    <Grid Grid.Row="7" Margin="0,0,0,15">
                         <CheckBox Content="开机自启动"
                                   IsChecked="{Binding AutoStart}"
                                   FontSize="14"
                                   Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
-                </StackPanel>
+
+                    <!-- 应用按钮 -->
+                    <Button Grid.Row="8"
+                            Content="保存所有设置"
+                            Command="{Binding ApplySettingsCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            HorizontalAlignment="Right"
+                            Width="120"
+                            Height="40"
+                            FontSize="14"
+                            FontWeight="Bold"/>
+                </Grid>
             </Border>
 
             <!-- 操作按钮区域 -->
-            <Grid Grid.Row="3">
+            <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -295,6 +287,16 @@
                         Margin="0,0,10,0"/>
 
                 <Button Grid.Column="2"
+                        Content="忘记密码"
+                        Command="{Binding ForgotPasswordCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="100"
+                        Height="36"
+                        Margin="0,0,10,0"
+                        Background="#FF9800"
+                        Foreground="White"/>
+
+                <Button Grid.Column="3"
                         Content="退出程序"
                         Command="{Binding ExitCommand}"
                         Style="{StaticResource PrimaryButtonStyle}"

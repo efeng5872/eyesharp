@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <!-- <ApplicationIcon>Resources\app.ico</ApplicationIcon> -->
+    <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
     <AssemblyName>eyesharp</AssemblyName>
     <RootNamespace>eyesharp</RootNamespace>
     <Version>1.0.0</Version>

@@ -6,7 +6,8 @@
         Height="700"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}"
-        ResizeMode="CanMinimize">
+        ResizeMode="CanMinimize"
+        Icon="/Resources/Icons/app.ico">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>

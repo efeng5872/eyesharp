@@ -40,7 +40,11 @@
 
   <ItemGroup>
     <!-- 资源文件 -->
-    <EmbeddedResource Include="Resources\**\*" />
+    <EmbeddedResource Include="Resources\**\*" Exclude="Resources\Icons\**\*" />
+    <!-- 图标文件 - 复制到输出目录 -->
+    <Content Include="Resources\Icons\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

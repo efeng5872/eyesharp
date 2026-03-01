@@ -48,6 +48,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 排除工具项目 -->
+    <Compile Remove="Tools\**\*.cs" />
+    <None Include="Tools\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- NLog 配置文件 -->
     <Content Include="NLog.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

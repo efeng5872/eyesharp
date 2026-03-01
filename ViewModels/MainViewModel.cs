@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Windows;
 using WinForms = System.Windows.Forms;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -22,6 +23,10 @@ namespace eyesharp.ViewModels
         private AppConfig _config;
         private RestWindow? _currentRestWindow;
         private WinForms.NotifyIcon? _trayIcon;
+
+        // 托盘图标资源
+        private System.Drawing.Icon? _trayIconNormal;
+        private System.Drawing.Icon? _trayIconPaused;
 
         [ObservableProperty]
         private string _statusText = "初始化中...";
@@ -131,11 +136,15 @@ namespace eyesharp.ViewModels
                         case TimerState.Running:
                             StatusText = "运行中";
                             PauseResumeButtonText = "暂停提醒";
+                            // 同步托盘图标
+                            UpdateTrayIconState(false);
                             break;
 
                         case TimerState.Paused:
                             StatusText = "已暂停";
                             PauseResumeButtonText = "恢复提醒";
+                            // 同步托盘图标
+                            UpdateTrayIconState(true);
                             break;
 
                         case TimerState.Resting:
@@ -295,11 +304,15 @@ namespace eyesharp.ViewModels
             {
                 _timerService.Pause();
                 _logService.Info("用户暂停倒计时");
+                // 更新托盘图标为暂停状态
+                UpdateTrayIconState(true);
             }
             else if (_timerService.State == TimerState.Paused)
             {
                 _timerService.Resume();
                 _logService.Info("用户恢复倒计时");
+                // 更新托盘图标为正常运行状态
+                UpdateTrayIconState(false);
             }
         }
 
@@ -539,10 +552,13 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void InitializeTrayIcon()
         {
+            // 加载自定义图标
+            LoadTrayIcons();
+
             _trayIcon = new WinForms.NotifyIcon
             {
-                Icon = System.Drawing.SystemIcons.Application,
-                Text = "EyeSharp 护眼助手",
+                Icon = _trayIconNormal ?? System.Drawing.SystemIcons.Application,
+                Text = "护眼助手 - 休息倒计时中",
                 Visible = true
             };
 
@@ -564,6 +580,82 @@ namespace eyesharp.ViewModels
             _trayIcon.DoubleClick += (s, e) => ShowMainWindow();
 
             _logService.Info("系统托盘图标已初始化");
+        }
+
+        /// <summary>
+        /// 加载托盘图标资源
+        /// </summary>
+        private void LoadTrayIcons()
+        {
+            try
+            {
+                // 获取图标文件路径
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var normalIconPath = Path.Combine(baseDir, "Resources", "Icons", "tray_normal_16x16.png");
+                var pausedIconPath = Path.Combine(baseDir, "Resources", "Icons", "tray_paused_16x16.png");
+
+                // 如果16x16不存在，尝试使用主文件
+                if (!File.Exists(normalIconPath))
+                {
+                    normalIconPath = Path.Combine(baseDir, "Resources", "Icons", "tray_normal.png");
+                }
+                if (!File.Exists(pausedIconPath))
+                {
+                    pausedIconPath = Path.Combine(baseDir, "Resources", "Icons", "tray_paused.png");
+                }
+
+                // 加载图标
+                if (File.Exists(normalIconPath))
+                {
+                    using var normalStream = new FileStream(normalIconPath, FileMode.Open, FileAccess.Read);
+                    using var normalBitmap = new System.Drawing.Bitmap(normalStream);
+                    _trayIconNormal = System.Drawing.Icon.FromHandle(normalBitmap.GetHicon());
+                    _logService.Info($"已加载正常运行图标: {normalIconPath}");
+                }
+                else
+                {
+                    _logService.Warn($"未找到正常运行图标: {normalIconPath}");
+                }
+
+                if (File.Exists(pausedIconPath))
+                {
+                    using var pausedStream = new FileStream(pausedIconPath, FileMode.Open, FileAccess.Read);
+                    using var pausedBitmap = new System.Drawing.Bitmap(pausedStream);
+                    _trayIconPaused = System.Drawing.Icon.FromHandle(pausedBitmap.GetHicon());
+                    _logService.Info($"已加载暂停状态图标: {pausedIconPath}");
+                }
+                else
+                {
+                    _logService.Warn($"未找到暂停状态图标: {pausedIconPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "加载托盘图标失败，将使用系统默认图标");
+            }
+        }
+
+        /// <summary>
+        /// 更新托盘图标状态
+        /// </summary>
+        private void UpdateTrayIconState(bool isPaused)
+        {
+            if (_trayIcon == null) return;
+
+            if (isPaused)
+            {
+                // 暂停状态
+                _trayIcon.Icon = _trayIconPaused ?? _trayIconNormal ?? System.Drawing.SystemIcons.Application;
+                _trayIcon.Text = "护眼助手 - 休息倒计时已暂停";
+                _logService.Info("托盘图标已切换为暂停状态");
+            }
+            else
+            {
+                // 正常运行状态
+                _trayIcon.Icon = _trayIconNormal ?? System.Drawing.SystemIcons.Application;
+                _trayIcon.Text = "护眼助手 - 休息倒计时中";
+                _logService.Info("托盘图标已切换为正常运行状态");
+            }
         }
 
         /// <summary>

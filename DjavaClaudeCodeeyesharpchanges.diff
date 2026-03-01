@@ -1,0 +1,963 @@
+diff --git a/.claude/settings.local.json b/.claude/settings.local.json
+index c559b61..98c6bf5 100644
+--- a/.claude/settings.local.json
++++ b/.claude/settings.local.json
+@@ -21,7 +21,14 @@
+       "Bash(\"D:\\\\java\\\\ClaudeCode\\\\eyesharp\\\\bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\eyesharp.exe\")",
+       "Bash(iconv:*)",
+       "Bash(git init:*)",
+-      "Bash(git add:*)"
++      "Bash(git add:*)",
++      "Bash(git commit:*)",
++      "Bash(del:*)",
++      "Bash(cmd.exe /c \"del /f /s /q D:\\\\java\\\\ClaudeCode\\\\eyesharp\\\\obj\")",
++      "Bash(cmd.exe:*)",
++      "Bash(Select-Object -First 10)",
++      "Bash(test:*)",
++      "Bash(Select-Object:*)"
+     ]
+   }
+ }
+diff --git a/App.xaml.cs b/App.xaml.cs
+index e98173a..b3acc11 100644
+--- a/App.xaml.cs
++++ b/App.xaml.cs
+@@ -44,6 +44,9 @@ namespace eyesharp
+                 return;
+             }
+ 
++            // 设置为显式关闭模式，防止对话框关闭时自动退出
++            ShutdownMode = ShutdownMode.OnExplicitShutdown;
++
+             // 配置服务
+             ConfigureServices();
+ 
+@@ -72,19 +75,29 @@ namespace eyesharp
+                 logService?.Info("应用程序启动");
+ 
+                 // 设置日志级别
++                logService?.Info("准备设置日志级别");
+                 logService?.SetLogLevel(_currentConfig.LogLevel);
++                logService?.Info("日志级别设置完成");
+ 
+                 // 清理旧日志
++                logService?.Info("准备清理旧日志");
+                 var logCleanupService = ServiceProvider.GetService<LogCleanupService>();
+                 logCleanupService?.CleanupOldLogs();
++                logService?.Info("旧日志清理完成");
+ 
+                 // 检查是否首次启动（密码未设置）
++                logService?.Info("准备检查密码服务");
+                 var passwordService = ServiceProvider.GetService<IPasswordService>();
++                logService?.Info($"密码服务获取成功，密码哈希长度: {_currentConfig.PasswordHash?.Length ?? 0}");
+ 
++                logService?.Info("检查密码是否已设置");
+                 if (passwordService != null && !passwordService.IsPasswordSet(_currentConfig.PasswordHash))
+                 {
++                    logService?.Info("密码未设置，准备显示密码设置对话框");
+                     // 首次启动，显示密码设置对话框
++                    logService?.Info("即将调用 ShowPasswordDialog()");
+                     bool? passwordSetResult = ShowPasswordDialog();
++                    logService?.Info($"密码设置对话框关闭，结果: {passwordSetResult.HasValue}, 值: {passwordSetResult.GetValueOrDefault()}");
+                     if (passwordSetResult != true)
+                     {
+                         // 用户取消密码设置，退出程序
+@@ -92,13 +105,31 @@ namespace eyesharp
+                         Shutdown();
+                         return;
+                     }
++
++                    // 重新加载配置以获取保存的密码哈希
++                    logService?.Info("重新加载配置");
++                    _currentConfig = Task.Run(() => configService.LoadConfigAsync()).GetAwaiter().GetResult();
++                    logService?.Info($"配置重新加载成功，密码哈希长度: {_currentConfig.PasswordHash?.Length ?? 0}");
+                 }
+ 
+                 // 创建并显示主窗口
+                 var timerService = ServiceProvider.GetService<ITimerService>();
++                logService?.Info("开始创建 MainViewModel");
+                 var mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, _currentConfig);
++                logService?.Info("MainViewModel 创建成功");
++
+                 var mainWindow = new MainWindow(mainViewModel);
++                logService?.Info("MainWindow 创建成功，准备显示");
++
++                logService?.Info("即将调用 mainWindow.Show()");
+                 mainWindow.Show();
++                logService?.Info("mainWindow.Show() 已调用");
++
++                // 主窗口已显示，设置为主窗口关闭模式
++                ShutdownMode = ShutdownMode.OnMainWindowClose;
++                logService?.Info("ShutdownMode 已设置为 OnMainWindowClose");
++
++                logService?.Info("Application_Startup 方法即将完成");
+             }
+             catch (Exception ex)
+             {
+@@ -196,8 +227,12 @@ namespace eyesharp
+         {
+             try
+             {
++                var showPwdDialogLogService = ServiceProvider.GetService<ILogService>();
++                showPwdDialogLogService?.Info("ShowPasswordDialog: 开始创建对话框");
+                 var dialog = new SetPasswordDialog();
++                showPwdDialogLogService?.Info("ShowPasswordDialog: 对话框已创建，准备显示");
+                 var result = dialog.ShowDialog();
++                showPwdDialogLogService?.Info($"ShowPasswordDialog: ShowDialog() 返回，结果: {result}");
+ 
+                 if (result == true)
+                 {
+@@ -213,18 +248,15 @@ namespace eyesharp
+                     {
+                         var passwordHash = passwordService.HashPassword(dialog.Password);
+                         _currentConfig!.PasswordHash = passwordHash;
++                        showPwdDialogLogService?.Info($"密码哈希生成成功，长度: {passwordHash?.Length ?? 0}");
+ 
+-                        // 保存配置
++                        // 使用 Task.Run 避免死锁
+                         var configService = ServiceProvider.GetService<IConfigService>();
+                         if (configService != null)
+                         {
+-                            configService.SaveConfigAsync(_currentConfig).Wait();
+-
+-                            var logService = ServiceProvider.GetService<ILogService>();
+-                            logService?.Info("首次启动密码设置成功");
+-
+-                            MessageBox.Show("密码设置成功！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+-
++                            showPwdDialogLogService?.Info("开始保存配置");
++                            Task.Run(() => configService.SaveConfigAsync(_currentConfig)).GetAwaiter().GetResult();
++                            showPwdDialogLogService?.Info("首次启动密码设置成功");
+                             return true;
+                         }
+                         else
+@@ -242,11 +274,14 @@ namespace eyesharp
+                 else
+                 {
+                     // 用户取消
++                    showPwdDialogLogService?.Info("用户取消密码设置");
+                     return false;
+                 }
+             }
+             catch (Exception ex)
+             {
++                var logService = ServiceProvider.GetService<ILogService>();
++                logService?.Error($"ShowPasswordDialog 异常: {ex.Message}");
+                 MessageBox.Show($"密码设置失败：{ex.Message}\n\n{ex.StackTrace}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                 return false;
+             }
+diff --git a/Services/ConfigService.cs b/Services/ConfigService.cs
+index 1984196..b3bd19d 100644
+--- a/Services/ConfigService.cs
++++ b/Services/ConfigService.cs
+@@ -38,6 +38,22 @@ namespace eyesharp.Services
+             };
+         }
+ 
++        /// <summary>
++        /// 构造函数（用于测试）
++        /// </summary>
++        public ConfigService(ILogService logService, string configDirectory)
++        {
++            _configDirectory = configDirectory;
++            _logService = logService;
++
++            _jsonOptions = new JsonSerializerOptions
++            {
++                WriteIndented = true,
++                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
++                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
++            };
++        }
++
+         /// <summary>
+         /// 获取配置文件完整路径
+         /// </summary>
+diff --git a/Services/IPasswordService.cs b/Services/IPasswordService.cs
+index a8c8e15..092d789 100644
+--- a/Services/IPasswordService.cs
++++ b/Services/IPasswordService.cs
+@@ -24,5 +24,10 @@ namespace eyesharp.Services
+         /// 验证密码强度
+         /// </summary>
+         bool ValidatePasswordStrength(string password);
++
++        /// <summary>
++        /// 获取密码强度信息
++        /// </summary>
++        Models.PasswordStrength GetPasswordStrength(string password);
+     }
+ }
+diff --git a/Services/PasswordService.cs b/Services/PasswordService.cs
+index 18aea55..9e804ab 100644
+--- a/Services/PasswordService.cs
++++ b/Services/PasswordService.cs
+@@ -77,5 +77,81 @@ namespace eyesharp.Services
+ 
+             return true;
+         }
++
++        /// <summary>
++        /// 获取密码强度信息
++        /// </summary>
++        public PasswordStrength GetPasswordStrength(string password)
++        {
++            var strength = new PasswordStrength();
++
++            // 检查长度
++            if (password.Length < 4)
++            {
++                strength.Level = 0;
++                strength.Description = "太短";
++                strength.Message = "密码长度至少4个字符";
++                return strength;
++            }
++
++            if (password.Length > 20)
++            {
++                strength.Level = 0;
++                strength.Description = "太长";
++                strength.Message = "密码长度不能超过20个字符";
++                return strength;
++            }
++
++            // 计算强度
++            int score = 0;
++
++            // 长度得分
++            if (password.Length >= 6) score++;
++            if (password.Length >= 8) score++;
++            if (password.Length >= 12) score++;
++
++            // 字符类型得分
++            bool hasLower = false;
++            bool hasUpper = false;
++            bool hasDigit = false;
++            bool hasSpecial = false;
++
++            foreach (char c in password)
++            {
++                if (char.IsLower(c)) hasLower = true;
++                else if (char.IsUpper(c)) hasUpper = true;
++                else if (char.IsDigit(c)) hasDigit = true;
++                else hasSpecial = true;
++            }
++
++            int charTypes = (hasLower ? 1 : 0) +
++                           (hasUpper ? 1 : 0) +
++                           (hasDigit ? 1 : 0) +
++                           (hasSpecial ? 1 : 0);
++
++            score += charTypes;
++
++            // 判定强度等级
++            if (score <= 3)
++            {
++                strength.Level = 1;
++                strength.Description = "弱";
++                strength.Message = "建议使用更复杂的密码";
++            }
++            else if (score <= 5)
++            {
++                strength.Level = 2;
++                strength.Description = "中";
++                strength.Message = "密码强度中等";
++            }
++            else
++            {
++                strength.Level = 3;
++                strength.Description = "强";
++                strength.Message = "密码强度很好";
++            }
++
++            return strength;
++        }
+     }
+ }
+diff --git a/Services/TimerService.cs b/Services/TimerService.cs
+index f753b41..cd99cbc 100644
+--- a/Services/TimerService.cs
++++ b/Services/TimerService.cs
+@@ -1,5 +1,6 @@
+ using System;
+ using System.Threading;
++using System.Threading.Tasks;
+ using eyesharp.Models;
+ using eyesharp.Helpers;
+ 
+@@ -93,17 +94,24 @@ namespace eyesharp.Services
+         /// </summary>
+         public void StartMainCountdown(TimeSpan duration)
+         {
++            // 先保存值
++            int remaining;
+             lock (_lock)
+             {
+                 _mainCountdownRemaining = (int)duration.TotalSeconds;
+                 State = TimerState.Running;
++                remaining = _mainCountdownRemaining;
++            }
+ 
+-                // 启动定时器，每1000毫秒触发一次
+-                _timer?.Change(0, 1000);
++            // 在锁外启动定时器，避免死锁
++            _timer?.Change(0, 1000);
+ 
+-                // 立即触发一次Tick，显示初始值
++            // 使用 Task.Run 延迟触发 Tick，避免死锁
++            Task.Run(() =>
++            {
++                Task.Delay(50).Wait();  // 等待 50ms
+                 OnMainCountdownTick();
+-            }
++            });
+         }
+ 
+         /// <summary>
+@@ -154,17 +162,24 @@ namespace eyesharp.Services
+         /// </summary>
+         public void StartRestCountdown(TimeSpan duration)
+         {
++            // 先保存值
++            int remaining;
+             lock (_lock)
+             {
+                 _restCountdownRemaining = (int)duration.TotalSeconds;
+                 State = TimerState.Resting;
++                remaining = _restCountdownRemaining;
++            }
+ 
+-                // 启动定时器，每1000毫秒触发一次
+-                _timer?.Change(0, 1000);
++            // 在锁外启动定时器，避免死锁
++            _timer?.Change(0, 1000);
+ 
+-                // 立即触发一次Tick，显示初始值
++            // 使用 Task.Run 延迟触发 Tick，避免死锁
++            Task.Run(() =>
++            {
++                Task.Delay(50).Wait();  // 等待 50ms
+                 OnRestCountdownTick();
+-            }
++            });
+         }
+ 
+         /// <summary>
+diff --git a/ViewModels/MainViewModel.cs b/ViewModels/MainViewModel.cs
+index 49840a8..b7a346f 100644
+--- a/ViewModels/MainViewModel.cs
++++ b/ViewModels/MainViewModel.cs
+@@ -1,5 +1,6 @@
+ using System;
+ using System.Windows;
++using WinForms = System.Windows.Forms;
+ using CommunityToolkit.Mvvm.ComponentModel;
+ using CommunityToolkit.Mvvm.Input;
+ using eyesharp.Models;
+@@ -20,6 +21,7 @@ namespace eyesharp.ViewModels
+         private readonly IPasswordService _passwordService;
+         private AppConfig _config;
+         private RestWindow? _currentRestWindow;
++        private WinForms.NotifyIcon? _trayIcon;
+ 
+         [ObservableProperty]
+         private string _statusText = "初始化中...";
+@@ -75,7 +77,16 @@ namespace eyesharp.ViewModels
+             IsBlackMode = _config.RestWindowMode == "black";
+             IsImageMode = _config.RestWindowMode == "image";
+             CustomImagePath = _config.CustomImagePath;
+-            AutoStart = _config.AutoStart;
++
++            // 同步开机自启动状态（以注册表实际状态为准）
++            AutoStart = AutoStartHelper.IsAutoStartEnabled();
++            if (AutoStart != _config.AutoStart)
++            {
++                // 如果注册表状态与配置不一致，更新配置
++                _config.AutoStart = AutoStart;
++                _ = _configService.SaveConfigAsync(_config);
++                _logService.Info("开机自启动状态已同步到配置");
++            }
+ 
+             // 订阅定时器事件
+             _timerService.StateChanged += OnTimerStateChanged;
+@@ -87,15 +98,19 @@ namespace eyesharp.ViewModels
+             StatusText = "运行中";
+             _logService.Info("配置加载成功");
+ 
+-            // 启动倒计时
+-            StartCountdown();
++            // 注意：不在构造函数中启动倒计时，而是在 MainWindow.Loaded 事件中启动
++            // 这样可以确保 Application.Current.Dispatcher 已经准备好
++
++            // 初始化系统托盘图标
++            InitializeTrayIcon();
+         }
+ 
+         /// <summary>
+-        /// 启动倒计时
++        /// 启动倒计时（公共方法，供外部调用）
+         /// </summary>
+-        private void StartCountdown()
++        public void StartCountdown()
+         {
++            _logService.Info("StartCountdown() 方法被调用");
+             var duration = TimeSpan.FromMinutes(_config.RestIntervalMinutes);
+             _timerService.StartMainCountdown(duration);
+             _logService.Info($"倒计时已启动：{_config.RestIntervalMinutes}分钟");
+@@ -107,26 +122,29 @@ namespace eyesharp.ViewModels
+         private void OnTimerStateChanged(object? sender, TimerStateChangedEventArgs e)
+         {
+             // 在UI线程中更新
+-            Application.Current.Dispatcher.Invoke(() =>
++            if (Application.Current?.Dispatcher != null)
+             {
+-                switch (e.NewState)
++                Application.Current.Dispatcher.Invoke(() =>
+                 {
+-                    case TimerState.Running:
+-                        StatusText = "运行中";
+-                        PauseResumeButtonText = "暂停提醒";
+-                        break;
+-
+-                    case TimerState.Paused:
+-                        StatusText = "已暂停";
+-                        PauseResumeButtonText = "恢复提醒";
+-                        break;
+-
+-                    case TimerState.Resting:
+-                        StatusText = "休息中";
+-                        PauseResumeButtonText = "休息中";
+-                        break;
+-                }
+-            });
++                    switch (e.NewState)
++                    {
++                        case TimerState.Running:
++                            StatusText = "运行中";
++                            PauseResumeButtonText = "暂停提醒";
++                            break;
++
++                        case TimerState.Paused:
++                            StatusText = "已暂停";
++                            PauseResumeButtonText = "恢复提醒";
++                            break;
++
++                        case TimerState.Resting:
++                            StatusText = "休息中";
++                            PauseResumeButtonText = "休息中";
++                            break;
++                    }
++                });
++            }
+         }
+ 
+         /// <summary>
+@@ -135,10 +153,13 @@ namespace eyesharp.ViewModels
+         private void OnMainCountdownTick(object? sender, TimerTickEventArgs e)
+         {
+             // 在UI线程中更新
+-            Application.Current.Dispatcher.Invoke(() =>
++            if (Application.Current?.Dispatcher != null)
+             {
+-                CountdownText = e.FormattedTime;
+-            });
++                Application.Current.Dispatcher.Invoke(() =>
++                {
++                    CountdownText = e.FormattedTime;
++                });
++            }
+         }
+ 
+         /// <summary>
+@@ -147,11 +168,14 @@ namespace eyesharp.ViewModels
+         private void OnMainCountdownElapsed(object? sender, EventArgs e)
+         {
+             // 在UI线程中处理
+-            Application.Current.Dispatcher.Invoke(() =>
++            if (Application.Current?.Dispatcher != null)
+             {
+-                _logService.Info("主倒计时结束，显示休息窗口");
+-                ShowRestWindow();
+-            });
++                Application.Current.Dispatcher.Invoke(() =>
++                {
++                    _logService.Info("主倒计时结束，显示休息窗口");
++                    ShowRestWindow();
++                });
++            }
+         }
+ 
+         /// <summary>
+@@ -160,10 +184,13 @@ namespace eyesharp.ViewModels
+         private void OnRestCountdownTick(object? sender, TimerTickEventArgs e)
+         {
+             // 在UI线程中更新休息窗口倒计时
+-            Application.Current.Dispatcher.Invoke(() =>
++            if (Application.Current?.Dispatcher != null)
+             {
+-                _currentRestWindow?.UpdateCountdown(e.RemainingSeconds);
+-            });
++                Application.Current.Dispatcher.Invoke(() =>
++                {
++                    _currentRestWindow?.UpdateCountdown(e.RemainingSeconds);
++                });
++            }
+         }
+ 
+         /// <summary>
+@@ -177,20 +204,23 @@ namespace eyesharp.ViewModels
+             StartCountdown();
+ 
+             // 异步关闭休息窗口，避免死锁
+-            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
++            if (Application.Current?.Dispatcher != null)
+             {
+-                _logService.Info("正在关闭休息窗口...");
+-                CloseRestWindow();
++                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
++                {
++                    _logService.Info("正在关闭休息窗口...");
++                    CloseRestWindow();
+ 
+-                // 强制刷新UI状态
+-                StatusText = "运行中";
+-                PauseResumeButtonText = "暂停提醒";
++                    // 强制刷新UI状态
++                    StatusText = "运行中";
++                    PauseResumeButtonText = "暂停提醒";
+ 
+-                var initialTime = DateTimeHelper.FormatCountdown(_timerService.MainCountdownRemaining);
+-                CountdownText = initialTime;
++                    var initialTime = DateTimeHelper.FormatCountdown(_timerService.MainCountdownRemaining);
++                    CountdownText = initialTime;
+ 
+-                _logService.Info($"主倒计时已重启，当前显示: {initialTime}, 状态: {StatusText}");
+-            }), System.Windows.Threading.DispatcherPriority.Normal);
++                    _logService.Info($"主倒计时已重启，当前显示: {initialTime}, 状态: {StatusText}");
++                }), System.Windows.Threading.DispatcherPriority.Normal);
++            }
+         }
+ 
+         /// <summary>
+@@ -305,6 +335,17 @@ namespace eyesharp.ViewModels
+                 // 保存配置
+                 await _configService.SaveConfigAsync(_config);
+ 
++                // 设置开机自启动
++                var autoStartResult = AutoStartHelper.SetAutoStart(AutoStart);
++                if (autoStartResult)
++                {
++                    _logService.Info($"开机自启动已{(AutoStart ? "启用" : "禁用")}");
++                }
++                else
++                {
++                    _logService.Warn("开机自启动设置失败");
++                }
++
+                 // 重启倒计时
+                 _timerService.Stop();
+                 StartCountdown();
+@@ -325,18 +366,146 @@ namespace eyesharp.ViewModels
+         [RelayCommand]
+         private void BrowseImage()
+         {
+-            // TODO: 实现文件夹浏览对话框
+             _logService.Info("用户点击浏览图片文件夹");
++
++            try
++            {
++                // 使用 Windows Forms 的 FolderBrowserDialog
++                using var dialog = new System.Windows.Forms.FolderBrowserDialog()
++                {
++                    Description = "选择包含图片的文件夹",
++                    ShowNewFolderButton = false,
++                    UseDescriptionForTitle = true
++                };
++
++                var result = dialog.ShowDialog();
++                if (result == System.Windows.Forms.DialogResult.OK)
++                {
++                    CustomImagePath = dialog.SelectedPath;
++                    _logService.Info($"用户选择图片文件夹: {CustomImagePath}");
++                }
++            }
++            catch (Exception ex)
++            {
++                _logService.Error(ex, "选择图片文件夹失败");
++                MessageBox.Show($"选择图片文件夹失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
++            }
+         }
+ 
+         /// <summary>
+         /// 修改密码命令
+         /// </summary>
+         [RelayCommand]
+-        private void ChangePassword()
++        private async System.Threading.Tasks.Task ChangePasswordAsync()
+         {
+-            // TODO: 打开修改密码对话框
+             _logService.Info("用户点击修改密码");
++
++            try
++            {
++                // 创建修改密码对话框
++                var dialog = new ChangePasswordDialog(_passwordService, _config.PasswordHash, _logService);
++
++                // 显示对话框
++                var result = dialog.ShowDialog();
++
++                if (result == true && dialog.NewPasswordHash != null)
++                {
++                    // 更新密码哈希
++                    _config.PasswordHash = dialog.NewPasswordHash;
++
++                    // 保存配置
++                    await _configService.SaveConfigAsync(_config);
++
++                    _logService.Info("密码修改成功");
++
++                    // 显示成功提示
++                    MessageBox.Show(
++                        "密码修改成功！",
++                        "成功",
++                        MessageBoxButton.OK,
++                        MessageBoxImage.Information
++                    );
++                }
++                else
++                {
++                    _logService.Info("用户取消修改密码");
++                }
++            }
++            catch (Exception ex)
++            {
++                _logService.Error(ex, "修改密码失败");
++                MessageBox.Show(
++                    "修改密码失败，请稍后重试。",
++                    "错误",
++                    MessageBoxButton.OK,
++                    MessageBoxImage.Error
++                );
++            }
++        }
++
++        /// <summary>
++        /// 忘记密码命令 - 清空所有配置并退出程序
++        /// </summary>
++        [RelayCommand]
++        private async System.Threading.Tasks.Task ForgotPasswordAsync()
++        {
++            _logService.Info("用户点击忘记密码");
++
++            try
++            {
++                // 显示确认对话框
++                var dialog = new ForgotPasswordDialog();
++                var result = dialog.ShowDialog();
++
++                if (result == true && dialog.IsConfirmed)
++                {
++                    // 获取配置文件路径
++                    var baseDir = AppDomain.CurrentDomain.BaseDirectory;
++                    var configPath = System.IO.Path.Combine(baseDir, "config.json");
++                    var backupPath = System.IO.Path.Combine(baseDir, "config.backup.json");
++
++                    // 删除配置文件
++                    if (System.IO.File.Exists(configPath))
++                    {
++                        System.IO.File.Delete(configPath);
++                        _logService.Info($"已删除配置文件: {configPath}");
++                    }
++
++                    // 删除备份文件（如果存在）
++                    if (System.IO.File.Exists(backupPath))
++                    {
++                        System.IO.File.Delete(backupPath);
++                        _logService.Info($"已删除备份文件: {backupPath}");
++                    }
++
++                    _logService.Info("所有配置已清空，程序将退出");
++
++                    // 显示提示
++                    MessageBox.Show(
++                        "所有配置已清空，程序将退出。\n下次启动时需要重新设置密码。",
++                        "重置成功",
++                        MessageBoxButton.OK,
++                        MessageBoxImage.Information
++                    );
++
++                    // 退出程序
++                    Application.Current.Shutdown();
++                }
++                else
++                {
++                    _logService.Info("用户取消重置操作");
++                }
++            }
++            catch (Exception ex)
++            {
++                _logService.Error(ex, "忘记密码操作失败");
++                MessageBox.Show(
++                    "操作失败，请稍后重试。",
++                    "错误",
++                    MessageBoxButton.OK,
++                    MessageBoxImage.Error
++                );
++            }
+         }
+ 
+         /// <summary>
+@@ -347,9 +516,60 @@ namespace eyesharp.ViewModels
+         {
+             // TODO: 保存配置并退出
+             _logService.Info("用户点击退出程序");
++            _trayIcon?.Dispose();
+             Application.Current.Shutdown();
+         }
+ 
++        /// <summary>
++        /// 初始化系统托盘图标
++        /// </summary>
++        private void InitializeTrayIcon()
++        {
++            _trayIcon = new WinForms.NotifyIcon
++            {
++                Icon = System.Drawing.SystemIcons.Application,
++                Text = "EyeSharp 护眼助手",
++                Visible = true
++            };
++
++            // 创建右键菜单
++            var contextMenu = new WinForms.ContextMenuStrip();
++            var showItem = new WinForms.ToolStripMenuItem("显示主窗口");
++            showItem.Click += (s, e) => ShowMainWindow();
++            contextMenu.Items.Add(showItem);
++
++            contextMenu.Items.Add(new WinForms.ToolStripSeparator());
++
++            var exitItem = new WinForms.ToolStripMenuItem("退出程序");
++            exitItem.Click += (s, e) => Exit();
++            contextMenu.Items.Add(exitItem);
++
++            _trayIcon.ContextMenuStrip = contextMenu;
++
++            // 双击托盘图标显示主窗口
++            _trayIcon.DoubleClick += (s, e) => ShowMainWindow();
++
++            _logService.Info("系统托盘图标已初始化");
++        }
++
++        /// <summary>
++        /// 显示主窗口
++        /// </summary>
++        [RelayCommand]
++        private void ShowMainWindow()
++        {
++            if (Application.Current?.Windows.Count > 0)
++            {
++                var mainWindow = Application.Current.Windows[0] as MainWindow;
++                if (mainWindow != null)
++                {
++                    mainWindow.Show();
++                    mainWindow.WindowState = WindowState.Normal;
++                    mainWindow.Activate();
++                }
++            }
++        }
++
+         /// <summary>
+         /// 部分属性变更时更新UI状态
+         /// </summary>
+diff --git a/Views/MainWindow.xaml b/Views/MainWindow.xaml
+index 558e728..b69417e 100644
+--- a/Views/MainWindow.xaml
++++ b/Views/MainWindow.xaml
+@@ -34,7 +34,6 @@
+                     <RowDefinition Height="Auto"/>
+                     <RowDefinition Height="Auto"/>
+                     <RowDefinition Height="Auto"/>
+-                    <RowDefinition Height="Auto"/>
+                 </Grid.RowDefinitions>
+ 
+             <!-- 状态显示区域 -->
+@@ -89,7 +88,7 @@
+                 </Grid>
+             </Border>
+ 
+-            <!-- 时间设置区域 -->
++            <!-- 提醒设置区域（合并时间设置和其他设置） -->
+             <Border Grid.Row="1"
+                     Background="{StaticResource CardBackgroundBrush}"
+                     BorderBrush="{StaticResource BorderBrush}"
+@@ -103,10 +102,14 @@
+                         <RowDefinition Height="Auto"/>
+                         <RowDefinition Height="Auto"/>
+                         <RowDefinition Height="Auto"/>
++                        <RowDefinition Height="Auto"/>
++                        <RowDefinition Height="Auto"/>
++                        <RowDefinition Height="Auto"/>
++                        <RowDefinition Height="Auto"/>
+                     </Grid.RowDefinitions>
+ 
+                     <TextBlock Grid.Row="0"
+-                               Text="时间设置"
++                               Text="提醒设置"
+                                FontSize="16"
+                                FontWeight="Medium"
+                                Foreground="{StaticResource TextPrimaryBrush}"
+@@ -147,7 +150,7 @@
+                     </Grid>
+ 
+                     <!-- 休息时长设置 -->
+-                    <Grid Grid.Row="2">
++                    <Grid Grid.Row="2" Margin="0,0,0,15">
+                         <Grid.ColumnDefinitions>
+                             <ColumnDefinition Width="120"/>
+                             <ColumnDefinition Width="*"/>
+@@ -180,42 +183,19 @@
+                         </StackPanel>
+                     </Grid>
+ 
+-                    <!-- 应用按钮 -->
+-                    <Button Grid.Row="3"
+-                            Content="应用设置"
+-                            Command="{Binding ApplySettingsCommand}"
+-                            Style="{StaticResource PrimaryButtonStyle}"
+-                            HorizontalAlignment="Right"
+-                            Margin="0,10,0,0"
+-                            Width="100"/>
+-                </Grid>
+-            </Border>
+-
+-            <!-- 其他设置区域 -->
+-            <Border Grid.Row="2"
+-                    Background="{StaticResource CardBackgroundBrush}"
+-                    BorderBrush="{StaticResource BorderBrush}"
+-                    BorderThickness="1"
+-                    CornerRadius="8"
+-                    Padding="20"
+-                    Margin="0,0,0,15">
+-                <StackPanel>
+-                    <TextBlock Text="其他设置"
+-                               FontSize="16"
+-                               FontWeight="Medium"
+-                               Foreground="{StaticResource TextPrimaryBrush}"
+-                               Margin="0,0,0,15"/>
++                    <!-- 分隔线 -->
++                    <Separator Grid.Row="3" Margin="0,0,0,15" Background="{StaticResource BorderBrush}"/>
+ 
+                     <!-- 强制模式 -->
+-                    <Grid Margin="0,0,0,10">
+-                        <CheckBox Content="强制休息模式"
++                    <Grid Grid.Row="4" Margin="0,0,0,10">
++                        <CheckBox Content="强制休息模式（需输入密码才能提前结束休息）"
+                                   IsChecked="{Binding IsForcedMode}"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                     </Grid>
+ 
+                     <!-- 休息窗口模式 -->
+-                    <Grid Margin="0,0,0,10">
++                    <Grid Grid.Row="5" Margin="0,0,0,10">
+                         <Grid.ColumnDefinitions>
+                             <ColumnDefinition Width="120"/>
+                             <ColumnDefinition Width="*"/>
+@@ -241,7 +221,7 @@
+                     </Grid>
+ 
+                     <!-- 自定义图片路径 -->
+-                    <Grid Margin="0,0,0,10">
++                    <Grid Grid.Row="6" Margin="0,0,0,10">
+                         <Grid.ColumnDefinitions>
+                             <ColumnDefinition Width="120"/>
+                             <ColumnDefinition Width="*"/>
+@@ -263,27 +243,39 @@
+                         <Button Grid.Column="2"
+                                 Content="浏览..."
+                                 Command="{Binding BrowseImageCommand}"
+-                        Width="80"
++                                Width="80"
+                                 Height="32"
+                                 Margin="10,0,0,0"/>
+                     </Grid>
+ 
+                     <!-- 开机自启动 -->
+-                    <Grid>
++                    <Grid Grid.Row="7" Margin="0,0,0,15">
+                         <CheckBox Content="开机自启动"
+                                   IsChecked="{Binding AutoStart}"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                     </Grid>
+-                </StackPanel>
++
++                    <!-- 应用按钮 -->
++                    <Button Grid.Row="8"
++                            Content="保存所有设置"
++                            Command="{Binding ApplySettingsCommand}"
++                            Style="{StaticResource PrimaryButtonStyle}"
++                            HorizontalAlignment="Right"
++                            Width="120"
++                            Height="40"
++                            FontSize="14"
++                            FontWeight="Bold"/>
++                </Grid>
+             </Border>
+ 
+             <!-- 操作按钮区域 -->
+-            <Grid Grid.Row="3">
++            <Grid Grid.Row="2">
+                 <Grid.ColumnDefinitions>
+                     <ColumnDefinition Width="*"/>
+                     <ColumnDefinition Width="Auto"/>
+                     <ColumnDefinition Width="Auto"/>
++                    <ColumnDefinition Width="Auto"/>
+                 </Grid.ColumnDefinitions>
+ 
+                 <Button Grid.Column="1"
+@@ -295,6 +287,16 @@
+                         Margin="0,0,10,0"/>
+ 
+                 <Button Grid.Column="2"
++                        Content="忘记密码"
++                        Command="{Binding ForgotPasswordCommand}"
++                        Style="{StaticResource PrimaryButtonStyle}"
++                        Width="100"
++                        Height="36"
++                        Margin="0,0,10,0"
++                        Background="#FF9800"
++                        Foreground="White"/>
++
++                <Button Grid.Column="3"
+                         Content="退出程序"
+                         Command="{Binding ExitCommand}"
+                         Style="{StaticResource PrimaryButtonStyle}"
+diff --git a/Views/MainWindow.xaml.cs b/Views/MainWindow.xaml.cs
+index 65674cf..5294119 100644
+--- a/Views/MainWindow.xaml.cs
++++ b/Views/MainWindow.xaml.cs
+@@ -13,6 +13,9 @@ namespace eyesharp.Views
+             InitializeComponent();
+             DataContext = viewModel;
+ 
++            // 窗口加载完成后启动倒计时
++            Loaded += (s, e) => viewModel.StartCountdown();
++
+             // 窗口关闭时最小化到托盘
+             Closing += (s, e) =>
+             {
+diff --git a/Views/SetPasswordDialog.xaml b/Views/SetPasswordDialog.xaml
+index e21e7d2..23c3262 100644
+--- a/Views/SetPasswordDialog.xaml
++++ b/Views/SetPasswordDialog.xaml
+@@ -3,8 +3,8 @@
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+         Title="设置密码 - EyeSharp"
+         Width="450"
+-        Height="350"
+-        WindowStartupLocation="CenterOwner"
++        Height="480"
++        WindowStartupLocation="CenterScreen"
+         ResizeMode="NoResize"
+         Background="{StaticResource BackgroundBrush}">
+ 

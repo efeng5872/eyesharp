@@ -29,6 +29,10 @@ namespace eyesharp.Views
         private int _currentImageIndex = 0;
         private System.Threading.Timer? _imageSwitchTimer;
 
+        // 密码错误计数器
+        private int _passwordErrorCount = 0;
+        private const int MaxPasswordErrorCount = 3;
+
         public RestWindow(IConfigService configService, IPasswordService passwordService, ILogService logService, AppConfig config, TimerState previousState)
         {
             InitializeComponent();
@@ -257,6 +261,13 @@ namespace eyesharp.Views
         /// </summary>
         private void OnEndRestClick(object sender, RoutedEventArgs e)
         {
+            // 如果已经超过最大错误次数，不允许再尝试
+            if (_passwordErrorCount >= MaxPasswordErrorCount)
+            {
+                ShowErrorMessage("请点击重置按钮");
+                return;
+            }
+
             var password = PasswordBox.Password;
 
             if (string.IsNullOrEmpty(password))
@@ -273,8 +284,21 @@ namespace eyesharp.Views
             }
             else
             {
-                _logService.Warn("用户输入错误密码");
-                ShowErrorMessage("密码错误");
+                _passwordErrorCount++;
+                _logService.Warn($"用户输入错误密码，错误次数: {_passwordErrorCount}");
+
+                if (_passwordErrorCount >= MaxPasswordErrorCount)
+                {
+                    // 显示重置按钮和提示
+                    ResetButton.Visibility = Visibility.Visible;
+                    ShowErrorMessage("密码错误超过3次，请点击重置");
+                    _logService.Warn("密码错误超过3次，显示重置按钮");
+                }
+                else
+                {
+                    ShowErrorMessage($"密码错误（{_passwordErrorCount}/3）");
+                }
+
                 PasswordBox.Clear();
             }
         }
@@ -286,6 +310,64 @@ namespace eyesharp.Views
         {
             _logService.Info("用户跳过休息（非强制模式）");
             CloseRestWindow();
+        }
+
+        /// <summary>
+        /// 重置按钮点击（密码错误3次后显示）
+        /// </summary>
+        private void OnResetClick(object sender, RoutedEventArgs e)
+        {
+            _logService.Info("用户点击重置按钮，显示重置确认对话框");
+
+            // 显示重置确认对话框
+            var dialog = new ForgotPasswordDialog();
+            var result = dialog.ShowDialog();
+
+            if (result == true && dialog.IsConfirmed)
+            {
+                // 用户确认重置，执行重置操作
+                try
+                {
+                    // 获取配置文件路径
+                    var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    var configPath = System.IO.Path.Combine(baseDir, "config.json");
+                    var backupPath = System.IO.Path.Combine(baseDir, "config.backup.json");
+
+                    // 删除配置文件
+                    if (System.IO.File.Exists(configPath))
+                    {
+                        System.IO.File.Delete(configPath);
+                        _logService.Info($"已删除配置文件: {configPath}");
+                    }
+
+                    // 删除备份文件（如果存在）
+                    if (System.IO.File.Exists(backupPath))
+                    {
+                        System.IO.File.Delete(backupPath);
+                        _logService.Info($"已删除备份文件: {backupPath}");
+                    }
+
+                    _logService.Info("所有配置已清空，程序将退出");
+
+                    // 关闭休息窗口后退出程序
+                    CloseRestWindow();
+
+                    // 退出程序
+                    Dispatcher.Invoke(() =>
+                    {
+                        Application.Current.Shutdown();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logService.Error(ex, "重置操作失败");
+                    ShowErrorMessage("重置失败");
+                }
+            }
+            else
+            {
+                _logService.Info("用户取消重置操作");
+            }
         }
 
         /// <summary>

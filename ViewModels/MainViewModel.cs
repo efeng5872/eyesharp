@@ -514,10 +514,24 @@ namespace eyesharp.ViewModels
         [RelayCommand]
         private void Exit()
         {
-            // TODO: 保存配置并退出
-            _logService.Info("用户点击退出程序");
-            _trayIcon?.Dispose();
-            Application.Current.Shutdown();
+            _logService.Info("用户点击退出程序，显示确认对话框");
+
+            // 显示退出确认对话框
+            var dialog = new ExitConfirmDialog();
+            var result = dialog.ShowDialog();
+
+            if (result == true)
+            {
+                // 用户确认退出
+                _logService.Info("用户确认退出程序");
+                _trayIcon?.Dispose();
+                Application.Current.Shutdown();
+            }
+            else
+            {
+                // 用户取消退出
+                _logService.Info("用户取消退出程序");
+            }
         }
 
         /// <summary>

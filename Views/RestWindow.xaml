@@ -44,6 +44,41 @@
                              VerticalAlignment="Center"
                              Margin="0,0,10,0"
                              KeyDown="OnPasswordKeyDown"/>
+                <!-- 重置按钮（密码错误3次后显示） -->
+                <Button x:Name="ResetButton"
+                        Content="重置"
+                        Click="OnResetClick"
+                        Width="80"
+                        Height="30"
+                        FontSize="14"
+                        Background="#F44336"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="0,0,10,0"
+                        Visibility="Collapsed">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="4"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#D32F2F"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Content="提前结束"
                         Click="OnEndRestClick"
                         Width="80"

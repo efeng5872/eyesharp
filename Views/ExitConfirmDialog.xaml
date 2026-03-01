@@ -1,0 +1,48 @@
+<Window x:Class="eyesharp.Views.ExitConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="确认退出"
+        Width="350"
+        Height="180"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="ToolWindow"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 提示信息 -->
+        <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="确定要退出 护眼助手吗？"
+                       FontSize="16"
+                       FontWeight="Medium"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       TextAlignment="Center"/>
+        </StackPanel>
+
+        <!-- 按钮区域 -->
+        <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Margin="0,20,0,0">
+            <Button Content="取消"
+                    Width="80"
+                    Height="32"
+                    Margin="0,0,15,0"
+                    Click="OnCancelClick"
+                    Style="{StaticResource PrimaryButtonStyle}"/>
+
+            <Button Content="确定退出"
+                    Width="80"
+                    Height="32"
+                    Click="OnConfirmClick"
+                    Background="#F44336"
+                    Foreground="White"
+                    Style="{StaticResource PrimaryButtonStyle}"/>
+        </StackPanel>
+    </Grid>
+</Window>

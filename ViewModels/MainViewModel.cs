@@ -682,9 +682,7 @@ namespace eyesharp.ViewModels
                 var mainWindow = Application.Current.Windows[0] as MainWindow;
                 if (mainWindow != null)
                 {
-                    mainWindow.Show();
-                    mainWindow.WindowState = WindowState.Normal;
-                    mainWindow.Activate();
+                    mainWindow.RestoreWindow();
                 }
             }
         }

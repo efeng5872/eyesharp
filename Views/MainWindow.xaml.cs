@@ -11,6 +11,11 @@ namespace eyesharp.Views
     /// </summary>
     public partial class MainWindow : Window
     {
+        // 窗口位置记忆
+        private double _savedLeft;
+        private double _savedTop;
+        private bool _isPositionSaved = false;
+
         public MainWindow(MainViewModel viewModel)
         {
             InitializeComponent();
@@ -20,7 +25,7 @@ namespace eyesharp.Views
             LoadWindowIcon();
 
             // 窗口加载完成后启动倒计时
-            Loaded += (s, e) => viewModel.StartCountdown();
+            Loaded += OnWindowLoaded;
 
             // 窗口关闭时最小化到托盘
             Closing += (s, e) =>
@@ -28,9 +33,49 @@ namespace eyesharp.Views
                 if (viewModel.ShowInTray)
                 {
                     e.Cancel = true;
+                    // 隐藏前保存窗口位置
+                    SaveWindowPosition();
                     Hide();
                 }
             };
+        }
+
+        /// <summary>
+        /// 窗口加载事件处理
+        /// </summary>
+        private void OnWindowLoaded(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel)
+            {
+                viewModel.StartCountdown();
+            }
+        }
+
+        /// <summary>
+        /// 保存当前窗口位置
+        /// </summary>
+        private void SaveWindowPosition()
+        {
+            _savedLeft = Left;
+            _savedTop = Top;
+            _isPositionSaved = true;
+        }
+
+        /// <summary>
+        /// 恢复窗口位置（如果已保存）
+        /// </summary>
+        public void RestoreWindow()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+
+            // 如果之前保存过位置，恢复到保存的位置
+            if (_isPositionSaved)
+            {
+                Left = _savedLeft;
+                Top = _savedTop;
+            }
         }
 
         /// <summary>

@@ -40,9 +40,13 @@
 
   <ItemGroup>
     <!-- 资源文件 -->
-    <EmbeddedResource Include="Resources\**\*" Exclude="Resources\Icons\**\*" />
+    <EmbeddedResource Include="Resources\**\*" Exclude="Resources\Icons\**\*;Resources\Images\**\*" />
     <!-- 图标文件 - 复制到输出目录 -->
     <Content Include="Resources\Icons\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- 内置护眼图片 - 复制到输出目录 -->
+    <Content Include="Resources\Images\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

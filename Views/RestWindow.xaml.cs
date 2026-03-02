@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -164,9 +165,8 @@ namespace eyesharp.Views
                 // 如果自定义图片为空或无效，使用内置图片
                 if (_imageFiles == null || _imageFiles.Length == 0)
                 {
-                    _logService.Warn("自定义图片文件夹无效或为空，使用内置图片");
-                    // TODO: 加载内置图片（暂时使用黑色背景）
-                    _imageFiles = new string[0];
+                    _logService.Info("自定义图片文件夹无效或为空，加载内置护眼图片");
+                    _imageFiles = LoadBuiltInImages();
                 }
 
                 // 使用 Fisher-Yates 洗牌算法随机排序
@@ -189,6 +189,60 @@ namespace eyesharp.Views
             {
                 _logService.Error(ex, "加载图片失败");
                 _imageFiles = new string[0];
+            }
+        }
+
+        /// <summary>
+        /// 加载内置护眼图片
+        /// </summary>
+        private string[] LoadBuiltInImages()
+        {
+            try
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var imagesDir = System.IO.Path.Combine(baseDir, "Resources", "Images");
+
+                // 内置图片文件名
+                var builtInImageNames = new[]
+                {
+                    "eye1.jpg",
+                    "eye2.jpg",
+                    "eye3.jpg",
+                    "eye4.jpg",
+                    "eye5.jpg"
+                };
+
+                var imagePaths = new List<string>();
+
+                foreach (var imageName in builtInImageNames)
+                {
+                    var imagePath = System.IO.Path.Combine(imagesDir, imageName);
+                    if (System.IO.File.Exists(imagePath))
+                    {
+                        imagePaths.Add(imagePath);
+                        _logService.Debug($"加载内置图片: {imageName}");
+                    }
+                    else
+                    {
+                        _logService.Warn($"内置图片不存在: {imagePath}");
+                    }
+                }
+
+                if (imagePaths.Count == 0)
+                {
+                    _logService.Error("没有可用的内置图片");
+                }
+                else
+                {
+                    _logService.Info($"成功加载 {imagePaths.Count} 张内置护眼图片");
+                }
+
+                return imagePaths.ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "加载内置图片失败");
+                return new string[0];
             }
         }
 

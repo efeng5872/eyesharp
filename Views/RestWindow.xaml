@@ -154,7 +154,7 @@
                        Text="00:20"
                        FontSize="32"
                        FontWeight="Bold"
-                       Foreground="White"
+                       Foreground="#808080"
                        VerticalAlignment="Center"/>
         </StackPanel>
     </Grid>

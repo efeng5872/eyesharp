@@ -28,7 +28,7 @@ namespace eyesharp.Views
 
         // 定时器常量
         private const int ImageSwitchIntervalSeconds = 10;
-        private const int TopmostCheckIntervalSeconds = 5;
+        private const int TopmostCheckIntervalSeconds = 1;
 
         private string[]? _imageFiles;
         private int _currentImageIndex = 0;

@@ -30,7 +30,8 @@
       "Bash(test:*)",
       "Bash(Select-Object:*)",
       "Bash(ls:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(dotnet test:*)"
     ]
   }
 }

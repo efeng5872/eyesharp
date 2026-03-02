@@ -11,10 +11,9 @@ namespace eyesharp.Views
     /// </summary>
     public partial class MainWindow : Window
     {
-        // 窗口位置记忆
-        private double _savedLeft;
-        private double _savedTop;
-        private bool _isPositionSaved = false;
+        // 窗口位置记忆（使用可空类型消除冗余标志）
+        private double? _savedLeft;
+        private double? _savedTop;
 
         public MainWindow(MainViewModel viewModel)
         {
@@ -58,7 +57,6 @@ namespace eyesharp.Views
         {
             _savedLeft = Left;
             _savedTop = Top;
-            _isPositionSaved = true;
         }
 
         /// <summary>
@@ -71,10 +69,10 @@ namespace eyesharp.Views
             Activate();
 
             // 如果之前保存过位置，恢复到保存的位置
-            if (_isPositionSaved)
+            if (_savedLeft.HasValue)
             {
-                Left = _savedLeft;
-                Top = _savedTop;
+                Left = _savedLeft.Value;
+                Top = _savedTop.Value;
             }
         }
 

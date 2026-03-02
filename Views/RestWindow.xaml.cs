@@ -26,9 +26,13 @@ namespace eyesharp.Views
         private readonly AppConfig _config;
         private readonly TimerState _previousState;
 
+        // 定时器常量
+        private const int ImageSwitchIntervalSeconds = 10;
+        private const int TopmostCheckIntervalSeconds = 5;
+
         private string[]? _imageFiles;
         private int _currentImageIndex = 0;
-        private System.Threading.Timer? _imageSwitchTimer;
+        private System.Windows.Threading.DispatcherTimer? _imageSwitchTimer;
 
         // 密码错误计数器
         private int _passwordErrorCount = 0;
@@ -38,8 +42,10 @@ namespace eyesharp.Views
         private bool _isImage1Visible = true;
 
         // 置顶恢复定时器
-        private System.Threading.Timer? _topmostRestoreTimer;
-        private const int TopmostCheckIntervalMs = 1000; // 每秒检测一次
+        private System.Windows.Threading.DispatcherTimer? _topmostRestoreTimer;
+
+        // 错误消息恢复定时器
+        private System.Windows.Threading.DispatcherTimer? _errorResetTimer;
 
         public RestWindow(IConfigService configService, IPasswordService passwordService, ILogService logService, AppConfig config, TimerState previousState)
         {
@@ -330,15 +336,18 @@ namespace eyesharp.Views
             if (_imageFiles == null || _imageFiles.Length <= 1)
                 return;
 
-            // 每10秒切换一次图片
-            _imageSwitchTimer = new System.Threading.Timer(state =>
+            // 使用 DispatcherTimer 避免线程切换开销
+            _imageSwitchTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Dispatcher.Invoke(() =>
-                {
-                    _currentImageIndex = (_currentImageIndex + 1) % _imageFiles!.Length;
-                    LoadImage(_currentImageIndex);
-                });
-            }, null, 10000, 10000);
+                Interval = TimeSpan.FromSeconds(ImageSwitchIntervalSeconds)
+            };
+            _imageSwitchTimer.Tick += (s, e) =>
+            {
+                _currentImageIndex = (_currentImageIndex + 1) % _imageFiles!.Length;
+                LoadImage(_currentImageIndex);
+            };
+            _imageSwitchTimer.Start();
+            _logService.Debug($"图片轮播定时器已启动，间隔: {ImageSwitchIntervalSeconds}秒");
         }
 
         /// <summary>
@@ -492,19 +501,27 @@ namespace eyesharp.Views
         /// </summary>
         private void ShowErrorMessage(string message)
         {
+            // 取消之前的错误恢复定时器
+            _errorResetTimer?.Stop();
+
             // 简单的错误提示
             var originalText = CountdownText.Text;
             CountdownText.Text = message;
             CountdownText.Foreground = new SolidColorBrush(Colors.Red);
 
-            var timer = new System.Threading.Timer(state =>
+            // 使用 DispatcherTimer 避免线程切换
+            _errorResetTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Dispatcher.Invoke(() =>
-                {
-                    CountdownText.Text = originalText;
-                    CountdownText.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
-                });
-            }, null, 2000, Timeout.Infinite);
+                Interval = TimeSpan.FromSeconds(2)
+            };
+            _errorResetTimer.Tick += (s, e) =>
+            {
+                CountdownText.Text = originalText;
+                CountdownText.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
+                _errorResetTimer?.Stop();
+                _errorResetTimer = null;
+            };
+            _errorResetTimer.Start();
         }
 
         /// <summary>
@@ -513,10 +530,10 @@ namespace eyesharp.Views
         private void CloseRestWindow()
         {
             // 停止图片轮播定时器
-            _imageSwitchTimer?.Dispose();
+            _imageSwitchTimer?.Stop();
 
             // 停止置顶恢复定时器
-            _topmostRestoreTimer?.Dispose();
+            _topmostRestoreTimer?.Stop();
 
             Close();
         }
@@ -526,34 +543,37 @@ namespace eyesharp.Views
         /// </summary>
         private void StartTopmostRestoreTimer()
         {
-            _topmostRestoreTimer = new System.Threading.Timer(state =>
+            // 使用 DispatcherTimer 避免线程切换，延长检测间隔到5秒
+            _topmostRestoreTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Dispatcher.Invoke(() =>
+                Interval = TimeSpan.FromSeconds(TopmostCheckIntervalSeconds)
+            };
+            _topmostRestoreTimer.Tick += (s, e) =>
+            {
+                try
                 {
-                    try
+                    // 检测并恢复置顶状态
+                    if (!Topmost)
                     {
-                        // 检测并恢复置顶状态
-                        if (!Topmost)
-                        {
-                            Topmost = true;
-                            _logService.Debug("休息窗口置顶状态被重置，已恢复置顶");
-                        }
-
-                        // 确保窗口始终在最前面
-                        if (!IsActive)
-                        {
-                            Activate();
-                            _logService.Debug("休息窗口失去焦点，已强制激活");
-                        }
+                        Topmost = true;
+                        _logService.Debug("休息窗口置顶状态被重置，已恢复置顶");
                     }
-                    catch (Exception ex)
+
+                    // 确保窗口始终在最前面
+                    if (!IsActive)
                     {
-                        _logService.Error(ex, "置顶恢复定时器执行异常");
+                        Activate();
+                        _logService.Debug("休息窗口失去焦点，已强制激活");
                     }
-                });
-            }, null, TopmostCheckIntervalMs, TopmostCheckIntervalMs);
+                }
+                catch (Exception ex)
+                {
+                    _logService.Error(ex, "置顶恢复定时器执行异常");
+                }
+            };
+            _topmostRestoreTimer.Start();
 
-            _logService.Info("置顶恢复定时器已启动");
+            _logService.Info($"置顶恢复定时器已启动，检测间隔: {TopmostCheckIntervalSeconds}秒");
         }
 
         /// <summary>
@@ -561,8 +581,14 @@ namespace eyesharp.Views
         /// </summary>
         protected override void OnClosed(EventArgs e)
         {
-            _imageSwitchTimer?.Dispose();
-            _topmostRestoreTimer?.Dispose();
+            // 取消事件订阅
+            Loaded -= OnLoaded;
+            KeyDown -= OnKeyDown;
+
+            // 停止定时器
+            _imageSwitchTimer?.Stop();
+            _topmostRestoreTimer?.Stop();
+
             _logService.Info("休息窗口已关闭");
             base.OnClosed(e);
         }

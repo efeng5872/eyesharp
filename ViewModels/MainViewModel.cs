@@ -744,6 +744,12 @@ namespace eyesharp.ViewModels
             _trayIcon?.Dispose();
             _trayIcon = null;
 
+            // 释放图标资源（修复内存泄漏）
+            _trayIconNormal?.Dispose();
+            _trayIconNormal = null;
+            _trayIconPaused?.Dispose();
+            _trayIconPaused = null;
+
             _logService.Info("MainViewModel 已释放");
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -20,6 +21,21 @@ namespace eyesharp
         private static IServiceProvider? _serviceProvider;
         private static Mutex? _singleInstanceMutex;
         private static AppConfig? _currentConfig;
+
+        // Windows API 用于跨进程窗口激活
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        private const int SW_RESTORE = 9;
 
         /// <summary>
         /// 获取服务提供者
@@ -175,12 +191,9 @@ namespace eyesharp
                         return true;
                     }
 
-                    // Mutex 被其他进程持有，显示提示
-                    MessageBox.Show(
-                        "程序已在运行中。\n请检查系统托盘图标。",
-                        "EyeSharp 护眼助手",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    // Mutex 被其他进程持有，激活已运行实例的窗口
+                    _logger?.Info("检测到已有实例运行，尝试激活已运行实例窗口");
+                    ActivateExistingInstance();
 
                     return false;
                 }
@@ -191,6 +204,50 @@ namespace eyesharp
             {
                 _logger?.Error(ex, "检查单实例失败");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// 激活已运行实例的窗口
+        /// </summary>
+        private void ActivateExistingInstance()
+        {
+            try
+            {
+                // 查找已运行实例的主窗口（通过窗口标题）
+                IntPtr hWnd = FindWindow(null, "EyeSharp 护眼助手");
+
+                if (hWnd != IntPtr.Zero)
+                {
+                    // 如果窗口最小化，则恢复它
+                    if (IsIconic(hWnd))
+                    {
+                        ShowWindow(hWnd, SW_RESTORE);
+                    }
+
+                    // 将窗口置于前台
+                    SetForegroundWindow(hWnd);
+                    _logger?.Info("成功激活已运行实例的窗口");
+                }
+                else
+                {
+                    // 未找到窗口，显示提示
+                    MessageBox.Show(
+                        "程序已在运行中。\n请检查系统托盘图标。",
+                        "EyeSharp 护眼助手",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error(ex, "激活已运行实例窗口失败");
+                // 出错时仍然显示提示
+                MessageBox.Show(
+                    "程序已在运行中。\n请检查系统托盘图标。",
+                    "EyeSharp 护眼助手",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
         }
 

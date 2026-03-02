@@ -67,6 +67,12 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private string _versionInfo = "EyeSharp v1.0.0";
 
+        // 日志级别选项
+        public string[] LogLevelOptions { get; } = { "DEBUG", "INFO", "WARN", "ERROR" };
+
+        [ObservableProperty]
+        private string _selectedLogLevel = "INFO";
+
         public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, AppConfig config)
         {
             _configService = configService;
@@ -82,6 +88,9 @@ namespace eyesharp.ViewModels
             IsBlackMode = _config.RestWindowMode == "black";
             IsImageMode = _config.RestWindowMode == "image";
             CustomImagePath = _config.CustomImagePath;
+
+            // 初始化日志级别（从配置读取，默认INFO）
+            SelectedLogLevel = string.IsNullOrEmpty(_config.LogLevel) ? "INFO" : _config.LogLevel.ToUpper();
 
             // 同步开机自启动状态（以注册表实际状态为准）
             AutoStart = AutoStartHelper.IsAutoStartEnabled();
@@ -344,6 +353,10 @@ namespace eyesharp.ViewModels
                 _config.RestWindowMode = IsBlackMode ? "black" : "image";
                 _config.CustomImagePath = CustomImagePath;
                 _config.AutoStart = AutoStart;
+                _config.LogLevel = SelectedLogLevel;
+
+                // 应用日志级别变更
+                _logService.SetLogLevel(SelectedLogLevel);
 
                 // 保存配置
                 await _configService.SaveConfigAsync(_config);

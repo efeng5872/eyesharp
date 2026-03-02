@@ -535,6 +535,28 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 隐藏到托盘命令
+        /// </summary>
+        [RelayCommand]
+        private void HideToTray()
+        {
+            _logService.Info("用户点击隐藏到托盘");
+
+            // 隐藏主窗口（与点击关闭按钮行为一致）
+            if (Application.Current?.Windows.Count > 0)
+            {
+                var mainWindow = Application.Current.Windows[0] as MainWindow;
+                if (mainWindow != null)
+                {
+                    // 保存窗口位置（与关闭时行为一致）
+                    mainWindow.SaveWindowPosition();
+                    mainWindow.Hide();
+                    _logService.Info("主窗口已隐藏到托盘");
+                }
+            }
+        }
+
+        /// <summary>
         /// 退出命令
         /// </summary>
         [RelayCommand]

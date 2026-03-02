@@ -303,9 +303,18 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="1"
+                        Content="隐藏"
+                        Command="{Binding HideToTrayCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="100"
+                        Height="36"
+                        Margin="0,0,10,0"/>
+
+                <Button Grid.Column="2"
                         Content="修改密码"
                         Command="{Binding ChangePasswordCommand}"
                         Style="{StaticResource PrimaryButtonStyle}"
@@ -313,7 +322,7 @@
                         Height="36"
                         Margin="0,0,10,0"/>
 
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         Content="忘记密码"
                         Command="{Binding ForgotPasswordCommand}"
                         Style="{StaticResource PrimaryButtonStyle}"
@@ -323,7 +332,7 @@
                         Background="#FF9800"
                         Foreground="White"/>
 
-                <Button Grid.Column="3"
+                <Button Grid.Column="4"
                         Content="退出程序"
                         Command="{Binding ExitCommand}"
                         Style="{StaticResource PrimaryButtonStyle}"

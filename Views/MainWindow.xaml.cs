@@ -54,7 +54,7 @@ namespace eyesharp.Views
         /// <summary>
         /// 保存当前窗口位置
         /// </summary>
-        private void SaveWindowPosition()
+        public void SaveWindowPosition()
         {
             _savedLeft = Left;
             _savedTop = Top;

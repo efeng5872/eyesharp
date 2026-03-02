@@ -73,6 +73,9 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private string _selectedLogLevel = "INFO";
 
+        [ObservableProperty]
+        private bool _isPreReminderEnabled = true;
+
         public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, AppConfig config)
         {
             _configService = configService;
@@ -92,6 +95,9 @@ namespace eyesharp.ViewModels
             // 初始化日志级别（从配置读取，默认INFO）
             SelectedLogLevel = string.IsNullOrEmpty(_config.LogLevel) ? "INFO" : _config.LogLevel.ToUpper();
 
+            // 初始化预提醒设置
+            IsPreReminderEnabled = _config.IsPreReminderEnabled;
+
             // 同步开机自启动状态（以注册表实际状态为准）
             AutoStart = AutoStartHelper.IsAutoStartEnabled();
             if (AutoStart != _config.AutoStart)
@@ -108,6 +114,14 @@ namespace eyesharp.ViewModels
             _timerService.MainCountdownElapsed += OnMainCountdownElapsed;
             _timerService.RestCountdownTick += OnRestCountdownTick;
             _timerService.RestCountdownElapsed += OnRestCountdownElapsed;
+            _timerService.PreReminder += OnPreReminder;
+
+            // 配置预提醒
+            if (_timerService is TimerService concreteTimerService)
+            {
+                concreteTimerService.IsPreReminderEnabled = _config.IsPreReminderEnabled;
+                concreteTimerService.PreReminderIntervals = _config.PreReminderIntervals;
+            }
 
             StatusText = "运行中";
             _logService.Info("配置加载成功");
@@ -242,6 +256,25 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 休息前预提醒处理
+        /// </summary>
+        private void OnPreReminder(object? sender, PreReminderEventArgs e)
+        {
+            _logService.Info($"预提醒触发：{e.SecondsUntilRest}秒后开始休息");
+
+            // 显示托盘气泡提示
+            if (_trayIcon != null)
+            {
+                _trayIcon.ShowBalloonTip(
+                    5000,  // 显示5秒
+                    "EyeSharp 护眼提醒",
+                    e.Message,
+                    WinForms.ToolTipIcon.Info
+                );
+            }
+        }
+
+        /// <summary>
         /// 显示休息窗口
         /// </summary>
         private void ShowRestWindow()
@@ -354,9 +387,16 @@ namespace eyesharp.ViewModels
                 _config.CustomImagePath = CustomImagePath;
                 _config.AutoStart = AutoStart;
                 _config.LogLevel = SelectedLogLevel;
+                _config.IsPreReminderEnabled = IsPreReminderEnabled;
 
                 // 应用日志级别变更
                 _logService.SetLogLevel(SelectedLogLevel);
+
+                // 应用预提醒设置
+                if (_timerService is TimerService concreteTimerService)
+                {
+                    concreteTimerService.IsPreReminderEnabled = IsPreReminderEnabled;
+                }
 
                 // 保存配置
                 await _configService.SaveConfigAsync(_config);

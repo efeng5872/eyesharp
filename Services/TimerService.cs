@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using eyesharp.Models;
@@ -17,6 +18,54 @@ namespace eyesharp.Services
         private int _mainCountdownRemaining = 0;
         private int _restCountdownRemaining = 0;
         private bool _disposed = false;
+
+        // 预提醒配置
+        private bool _isPreReminderEnabled = true;
+        private int[] _preReminderIntervals = { 30, 10 };
+        private HashSet<int> _reminderTriggered = new HashSet<int>();
+
+        /// <summary>
+        /// 是否启用预提醒
+        /// </summary>
+        public bool IsPreReminderEnabled
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _isPreReminderEnabled;
+                }
+            }
+            set
+            {
+                lock (_lock)
+                {
+                    _isPreReminderEnabled = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 预提醒时间间隔（秒）
+        /// </summary>
+        public int[] PreReminderIntervals
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _preReminderIntervals;
+                }
+            }
+            set
+            {
+                lock (_lock)
+                {
+                    _preReminderIntervals = value ?? new[] { 30, 10 };
+                    _reminderTriggered.Clear();
+                }
+            }
+        }
 
         public TimerState State
         {
@@ -82,6 +131,7 @@ namespace eyesharp.Services
         public event EventHandler<TimerTickEventArgs>? RestCountdownTick;
         public event EventHandler? MainCountdownElapsed;
         public event EventHandler? RestCountdownElapsed;
+        public event EventHandler<PreReminderEventArgs>? PreReminder;
 
         public TimerService()
         {
@@ -98,6 +148,7 @@ namespace eyesharp.Services
             {
                 _mainCountdownRemaining = (int)duration.TotalSeconds;
                 State = TimerState.Running;
+                _reminderTriggered.Clear(); // 重置预提醒状态
             }
 
             // 在锁外启动定时器，避免死锁
@@ -247,6 +298,42 @@ namespace eyesharp.Services
             if (restElapsed)
             {
                 RestCountdownElapsed?.Invoke(this, EventArgs.Empty);
+            }
+
+            // 触发预提醒事件
+            CheckAndTriggerPreReminder();
+        }
+
+        /// <summary>
+        /// 检查并触发预提醒
+        /// </summary>
+        private void CheckAndTriggerPreReminder()
+        {
+            bool isEnabled;
+            int[] intervals;
+            int remaining;
+
+            lock (_lock)
+            {
+                isEnabled = _isPreReminderEnabled;
+                intervals = _preReminderIntervals;
+                remaining = _mainCountdownRemaining;
+            }
+
+            if (!isEnabled || _state != TimerState.Running || remaining <= 0)
+                return;
+
+            foreach (var interval in intervals)
+            {
+                if (remaining == interval && !_reminderTriggered.Contains(interval))
+                {
+                    _reminderTriggered.Add(interval);
+                    string message = interval <= 10
+                        ? $"{interval}秒后开始休息，请保存工作"
+                        : $"{interval}秒后开始休息";
+                    PreReminder?.Invoke(this, new PreReminderEventArgs(interval, message));
+                    break;
+                }
             }
         }
 

@@ -44,5 +44,15 @@ namespace eyesharp.Models
         /// 日志级别：DEBUG/INFO/WARN/ERROR
         /// </summary>
         public string LogLevel { get; set; } = "INFO";
+
+        /// <summary>
+        /// 是否启用休息前预提醒
+        /// </summary>
+        public bool IsPreReminderEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 预提醒时间间隔（秒），默认为 30,10 表示30秒和10秒各提醒一次
+        /// </summary>
+        public int[] PreReminderIntervals { get; set; } = { 30, 10 };
     }
 }

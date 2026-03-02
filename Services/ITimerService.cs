@@ -49,6 +49,11 @@ namespace eyesharp.Services
         event EventHandler? RestCountdownElapsed;
 
         /// <summary>
+        /// 休息前预提醒事件
+        /// </summary>
+        event EventHandler<PreReminderEventArgs>? PreReminder;
+
+        /// <summary>
         /// 开始主倒计时
         /// </summary>
         void StartMainCountdown(TimeSpan duration);
@@ -106,6 +111,28 @@ namespace eyesharp.Services
         {
             RemainingSeconds = remainingSeconds;
             FormattedTime = formattedTime;
+        }
+    }
+
+    /// <summary>
+    /// 休息前预提醒事件参数
+    /// </summary>
+    public class PreReminderEventArgs : EventArgs
+    {
+        /// <summary>
+        /// 距离休息开始的秒数
+        /// </summary>
+        public int SecondsUntilRest { get; set; }
+
+        /// <summary>
+        /// 提醒消息
+        /// </summary>
+        public string Message { get; set; }
+
+        public PreReminderEventArgs(int secondsUntilRest, string message)
+        {
+            SecondsUntilRest = secondsUntilRest;
+            Message = message;
         }
     }
 }

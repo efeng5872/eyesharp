@@ -37,6 +37,10 @@ namespace eyesharp.Views
         // 图片淡入淡出控制
         private bool _isImage1Visible = true;
 
+        // 置顶恢复定时器
+        private System.Threading.Timer? _topmostRestoreTimer;
+        private const int TopmostCheckIntervalMs = 1000; // 每秒检测一次
+
         public RestWindow(IConfigService configService, IPasswordService passwordService, ILogService logService, AppConfig config, TimerState previousState)
         {
             InitializeComponent();
@@ -78,6 +82,9 @@ namespace eyesharp.Views
                     LoadImages();
                     StartImageSlideshow();
                 }
+
+                // 启动置顶恢复定时器
+                StartTopmostRestoreTimer();
             }
             catch (Exception ex)
             {
@@ -508,7 +515,45 @@ namespace eyesharp.Views
             // 停止图片轮播定时器
             _imageSwitchTimer?.Dispose();
 
+            // 停止置顶恢复定时器
+            _topmostRestoreTimer?.Dispose();
+
             Close();
+        }
+
+        /// <summary>
+        /// 启动置顶恢复定时器
+        /// </summary>
+        private void StartTopmostRestoreTimer()
+        {
+            _topmostRestoreTimer = new System.Threading.Timer(state =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        // 检测并恢复置顶状态
+                        if (!Topmost)
+                        {
+                            Topmost = true;
+                            _logService.Debug("休息窗口置顶状态被重置，已恢复置顶");
+                        }
+
+                        // 确保窗口始终在最前面
+                        if (!IsActive)
+                        {
+                            Activate();
+                            _logService.Debug("休息窗口失去焦点，已强制激活");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.Error(ex, "置顶恢复定时器执行异常");
+                    }
+                });
+            }, null, TopmostCheckIntervalMs, TopmostCheckIntervalMs);
+
+            _logService.Info("置顶恢复定时器已启动");
         }
 
         /// <summary>
@@ -517,6 +562,7 @@ namespace eyesharp.Views
         protected override void OnClosed(EventArgs e)
         {
             _imageSwitchTimer?.Dispose();
+            _topmostRestoreTimer?.Dispose();
             _logService.Info("休息窗口已关闭");
             base.OnClosed(e);
         }

@@ -9,6 +9,21 @@
         Background="Black"
         WindowState="Normal">
 
+    <Window.Resources>
+        <!-- 淡入动画 -->
+        <Storyboard x:Key="FadeInAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             From="0" To="1"
+                             Duration="0:0:1"/>
+        </Storyboard>
+        <!-- 淡出动画 -->
+        <Storyboard x:Key="FadeOutAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             From="1" To="0"
+                             Duration="0:0:1"/>
+        </Storyboard>
+    </Window.Resources>
+
     <Grid>
         <!-- 背景图片/纯黑 -->
         <Grid x:Name="BackgroundGrid">
@@ -17,10 +32,15 @@
                 <SolidColorBrush Color="Black" x:Name="BackgroundBrush"/>
             </Grid.Background>
 
-            <!-- 图片模式（默认隐藏） -->
-            <Image x:Name="BackgroundImage"
+            <!-- 图片模式 - 双图切换实现淡入淡出 -->
+            <Image x:Name="BackgroundImage1"
                    Stretch="UniformToFill"
-                   Visibility="Collapsed"/>
+                   Visibility="Collapsed"
+                   Opacity="1"/>
+            <Image x:Name="BackgroundImage2"
+                   Stretch="UniformToFill"
+                   Visibility="Collapsed"
+                   Opacity="0"/>
         </Grid>
 
         <!-- 右下角控制区 -->

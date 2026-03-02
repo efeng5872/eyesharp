@@ -34,6 +34,9 @@ namespace eyesharp.Views
         private int _passwordErrorCount = 0;
         private const int MaxPasswordErrorCount = 3;
 
+        // 图片淡入淡出控制
+        private bool _isImage1Visible = true;
+
         public RestWindow(IConfigService configService, IPasswordService passwordService, ILogService logService, AppConfig config, TimerState previousState)
         {
             InitializeComponent();
@@ -114,13 +117,17 @@ namespace eyesharp.Views
             if (_config.RestWindowMode == "black")
             {
                 // 黑屏模式
-                BackgroundImage.Visibility = Visibility.Collapsed;
+                BackgroundImage1.Visibility = Visibility.Collapsed;
+                BackgroundImage2.Visibility = Visibility.Collapsed;
                 BackgroundBrush.Color = Colors.Black;
             }
             else if (_config.RestWindowMode == "image")
             {
-                // 图片模式
-                BackgroundImage.Visibility = Visibility.Visible;
+                // 图片模式 - 初始化第一张图片可见
+                BackgroundImage1.Visibility = Visibility.Visible;
+                BackgroundImage1.Opacity = 1;
+                BackgroundImage2.Visibility = Visibility.Collapsed;
+                BackgroundImage2.Opacity = 0;
             }
         }
 
@@ -247,7 +254,7 @@ namespace eyesharp.Views
         }
 
         /// <summary>
-        /// 加载指定索引的图片
+        /// 加载指定索引的图片（带淡入淡出效果）
         /// </summary>
         private void LoadImage(int index)
         {
@@ -263,7 +270,44 @@ namespace eyesharp.Views
                 bitmap.UriSource = new Uri(imagePath);
                 bitmap.EndInit();
 
-                BackgroundImage.Source = bitmap;
+                // 使用双图切换实现淡入淡出
+                var fadeInImage = _isImage1Visible ? BackgroundImage2 : BackgroundImage1;
+                var fadeOutImage = _isImage1Visible ? BackgroundImage1 : BackgroundImage2;
+
+                // 设置新图片
+                fadeInImage.Source = bitmap;
+                fadeInImage.Visibility = Visibility.Visible;
+                fadeInImage.Opacity = 0;
+
+                // 创建淡入淡出动画
+                var fadeInAnimation = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromSeconds(1)
+                };
+
+                var fadeOutAnimation = new DoubleAnimation
+                {
+                    From = 1,
+                    To = 0,
+                    Duration = TimeSpan.FromSeconds(1)
+                };
+
+                // 淡出完成后隐藏旧图片
+                fadeOutAnimation.Completed += (s, e) =>
+                {
+                    fadeOutImage.Visibility = Visibility.Collapsed;
+                };
+
+                // 执行动画
+                fadeInImage.BeginAnimation(OpacityProperty, fadeInAnimation);
+                fadeOutImage.BeginAnimation(OpacityProperty, fadeOutAnimation);
+
+                // 切换当前显示状态
+                _isImage1Visible = !_isImage1Visible;
+
+                _logService.Debug($"切换到图片: {System.IO.Path.GetFileName(imagePath)}");
             }
             catch (Exception ex)
             {

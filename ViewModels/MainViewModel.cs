@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using WinForms = System.Windows.Forms;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -91,6 +92,18 @@ namespace eyesharp.ViewModels
 
         [ObservableProperty]
         private string _themeButtonShortText = "深色";
+
+        // Toast通知属性
+        [ObservableProperty]
+        private System.Windows.Visibility _toastVisibility = System.Windows.Visibility.Collapsed;
+
+        [ObservableProperty]
+        private double _toastOpacity = 0;
+
+        [ObservableProperty]
+        private string _toastMessage = "";
+
+        private System.Windows.Threading.DispatcherTimer? _toastTimer;
 
         public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, IStatisticsService statisticsService, IThemeService themeService, AppConfig config)
         {
@@ -467,7 +480,7 @@ namespace eyesharp.ViewModels
                 StartCountdown();
 
                 _logService.Info("设置已应用并重启倒计时");
-                MessageBox.Show("设置已保存", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowToast("✅ 设置已保存");
             }
             catch (Exception ex)
             {
@@ -707,6 +720,48 @@ namespace eyesharp.ViewModels
                     MessageBoxImage.Error
                 );
             }
+        }
+
+        /// <summary>
+        /// 显示Toast通知
+        /// </summary>
+        /// <param name="message">消息内容</param>
+        /// <param name="durationMs">显示时长（毫秒）</param>
+        public void ShowToast(string message, int durationMs = 2000)
+        {
+            _logService.Info($"显示Toast: {message}");
+
+            // 取消之前的定时器
+            _toastTimer?.Stop();
+
+            // 设置消息并显示
+            ToastMessage = message;
+            ToastVisibility = System.Windows.Visibility.Visible;
+
+            // 使用动画效果显示
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(async () =>
+            {
+                // 淡入
+                for (double i = 0; i <= 1; i += 0.1)
+                {
+                    ToastOpacity = i;
+                    await Task.Delay(20);
+                }
+                ToastOpacity = 1;
+
+                // 等待指定时间
+                await Task.Delay(durationMs);
+
+                // 淡出
+                for (double i = 1; i >= 0; i -= 0.1)
+                {
+                    ToastOpacity = i;
+                    await Task.Delay(20);
+                }
+
+                ToastVisibility = System.Windows.Visibility.Collapsed;
+                ToastOpacity = 0;
+            });
         }
 
         /// <summary>

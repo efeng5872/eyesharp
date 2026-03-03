@@ -40,6 +40,9 @@ namespace eyesharp.ViewModels
         private string _countdownText = "00:00";
 
         [ObservableProperty]
+        private double _countdownProgress = 0;
+
+        [ObservableProperty]
         private string _pauseResumeButtonText = "暂停提醒";
 
         [ObservableProperty]
@@ -230,6 +233,14 @@ namespace eyesharp.ViewModels
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     CountdownText = e.FormattedTime;
+
+                    // 计算进度百分比
+                    var totalSeconds = _config.RestIntervalMinutes * 60;
+                    if (totalSeconds > 0)
+                    {
+                        var progress = (totalSeconds - e.RemainingSeconds) / (double)totalSeconds * 100;
+                        CountdownProgress = Math.Min(100, Math.Max(0, progress));
+                    }
                 });
             }
         }

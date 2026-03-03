@@ -35,7 +35,7 @@
 
             <!-- 按钮样式 -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Padding" Value="16,8"/>
@@ -56,21 +56,22 @@
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{StaticResource PrimaryDarkBrush}"/>
+                        <Setter Property="Background" Value="{DynamicResource PrimaryDarkBrush}"/>
                     </Trigger>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Background" Value="{StaticResource TextDisabledBrush}"/>
+                        <Setter Property="Background" Value="{DynamicResource TextDisabledBrush}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
 
             <!-- 文本框样式 -->
             <Style x:Key="TextBoxStyle" TargetType="TextBox">
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding" Value="8,6"/>
                 <Setter Property="FontSize" Value="14"/>
-                <Setter Property="Background" Value="White"/>
+                <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TextBox">
@@ -86,7 +87,7 @@
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsFocused" Value="True">
-                        <Setter Property="BorderBrush" Value="{StaticResource BorderFocusBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderFocusBrush}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>

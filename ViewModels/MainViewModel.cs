@@ -20,9 +20,13 @@ namespace eyesharp.ViewModels
         private readonly ILogService _logService;
         private readonly ITimerService _timerService;
         private readonly IPasswordService _passwordService;
+        private readonly IStatisticsService _statisticsService;
+        private readonly IThemeService _themeService;
         private AppConfig _config;
         private RestWindow? _currentRestWindow;
         private WinForms.NotifyIcon? _trayIcon;
+        private WinForms.ToolStripMenuItem? _trayPauseResumeItem;
+        private bool _isRestCompleted = false;
 
         // 托盘图标资源
         private System.Drawing.Icon? _trayIconNormal;
@@ -76,12 +80,20 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private bool _isPreReminderEnabled = true;
 
-        public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, AppConfig config)
+        [ObservableProperty]
+        private bool _isDarkTheme = false;
+
+        [ObservableProperty]
+        private string _themeButtonText = "🌙 深色";
+
+        public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, IStatisticsService statisticsService, IThemeService themeService, AppConfig config)
         {
             _configService = configService;
             _logService = logService;
             _timerService = timerService;
             _passwordService = passwordService;
+            _statisticsService = statisticsService;
+            _themeService = themeService;
             _config = config;
 
             // 更新UI属性
@@ -97,6 +109,10 @@ namespace eyesharp.ViewModels
 
             // 初始化预提醒设置
             IsPreReminderEnabled = _config.IsPreReminderEnabled;
+
+            // 初始化主题设置
+            IsDarkTheme = _config.Theme == "dark";
+            ThemeButtonText = IsDarkTheme ? "☀️ 浅色" : "🌙 深色";
 
             // 同步开机自启动状态（以注册表实际状态为准）
             AutoStart = AutoStartHelper.IsAutoStartEnabled();
@@ -131,6 +147,9 @@ namespace eyesharp.ViewModels
 
             // 初始化系统托盘图标
             InitializeTrayIcon();
+
+            // 加载统计数据
+            _ = _statisticsService.LoadAsync();
         }
 
         /// <summary>
@@ -232,6 +251,9 @@ namespace eyesharp.ViewModels
         {
             _logService.Info("休息倒计时结束，准备关闭休息窗口");
 
+            // 标记休息已完成
+            _isRestCompleted = true;
+
             // 先启动主倒计时（不阻塞）
             StartCountdown();
 
@@ -284,6 +306,11 @@ namespace eyesharp.ViewModels
                 var previousState = _timerService.State;
                 _logService.Info($"开始创建休息窗口，之前的状态: {previousState}");
 
+                // 开始记录休息统计
+                _isRestCompleted = false;
+                _statisticsService.StartRest(_config.RestDurationSeconds, _config.IsForcedMode);
+                _logService.Info("开始记录休息统计");
+
                 _currentRestWindow = new RestWindow(_configService, _passwordService, _logService, _config, previousState);
 
                 _logService.Info("休息窗口对象已创建");
@@ -292,6 +319,11 @@ namespace eyesharp.ViewModels
                 _currentRestWindow.Closed += (s, e) =>
                 {
                     _logService.Info("休息窗口 Closed 事件触发");
+
+                    // 结束休息统计
+                    _statisticsService.EndRest(_isRestCompleted);
+                    _logService.Info($"休息统计已记录，完成状态: {_isRestCompleted}");
+
                     if (_timerService.State == TimerState.Resting)
                     {
                         // 如果定时器还在 Resting 状态，说明是提前关闭的
@@ -359,6 +391,15 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 托盘菜单暂停/恢复切换
+        /// </summary>
+        private void TogglePauseResume()
+        {
+            _logService.Info("用户通过托盘菜单点击暂停/恢复");
+            PauseResume();
+        }
+
+        /// <summary>
         /// 应用设置命令
         /// </summary>
         [RelayCommand]
@@ -388,6 +429,7 @@ namespace eyesharp.ViewModels
                 _config.AutoStart = AutoStart;
                 _config.LogLevel = SelectedLogLevel;
                 _config.IsPreReminderEnabled = IsPreReminderEnabled;
+                _config.Theme = IsDarkTheme ? "dark" : "light";
 
                 // 应用日志级别变更
                 _logService.SetLogLevel(SelectedLogLevel);
@@ -575,6 +617,38 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 切换主题命令
+        /// </summary>
+        [RelayCommand]
+        private void ToggleTheme()
+        {
+            try
+            {
+                _logService.Info("用户点击切换主题");
+
+                // 切换主题状态
+                IsDarkTheme = !IsDarkTheme;
+
+                // 更新按钮文本
+                ThemeButtonText = IsDarkTheme ? "☀️ 浅色" : "🌙 深色";
+
+                // 应用主题
+                var theme = IsDarkTheme ? ThemeType.Dark : ThemeType.Light;
+                _themeService.ApplyTheme(theme);
+
+                // 保存配置
+                _config.Theme = IsDarkTheme ? "dark" : "light";
+                _ = _configService.SaveConfigAsync(_config);
+
+                _logService.Info($"主题已切换为: {_config.Theme}");
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "切换主题失败");
+            }
+        }
+
+        /// <summary>
         /// 隐藏到托盘命令
         /// </summary>
         [RelayCommand]
@@ -593,6 +667,35 @@ namespace eyesharp.ViewModels
                     mainWindow.Hide();
                     _logService.Info("主窗口已隐藏到托盘");
                 }
+            }
+        }
+
+        /// <summary>
+        /// 查看统计命令
+        /// </summary>
+        [RelayCommand]
+        private void ViewStatistics()
+        {
+            _logService.Info("用户点击查看统计");
+
+            try
+            {
+                // 保存当前统计数据
+                _ = _statisticsService.SaveAsync();
+
+                // 创建并显示统计窗口
+                var statisticsWindow = new StatisticsWindow(_statisticsService, _logService);
+                statisticsWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "打开统计窗口失败");
+                MessageBox.Show(
+                    "打开统计窗口失败，请稍后重试。",
+                    "错误",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
             }
         }
 
@@ -643,6 +746,11 @@ namespace eyesharp.ViewModels
             showItem.Click += (s, e) => ShowMainWindow();
             contextMenu.Items.Add(showItem);
 
+            // 添加暂停/恢复菜单项
+            var pauseResumeItem = new WinForms.ToolStripMenuItem("暂停提醒");
+            pauseResumeItem.Click += (s, e) => TogglePauseResume();
+            contextMenu.Items.Add(pauseResumeItem);
+
             contextMenu.Items.Add(new WinForms.ToolStripSeparator());
 
             var exitItem = new WinForms.ToolStripMenuItem("退出程序");
@@ -650,6 +758,9 @@ namespace eyesharp.ViewModels
             contextMenu.Items.Add(exitItem);
 
             _trayIcon.ContextMenuStrip = contextMenu;
+
+            // 保存引用以便后续更新
+            _trayPauseResumeItem = pauseResumeItem;
 
             // 双击托盘图标显示主窗口
             _trayIcon.DoubleClick += (s, e) => ShowMainWindow();
@@ -722,6 +833,8 @@ namespace eyesharp.ViewModels
                 // 暂停状态
                 _trayIcon.Icon = _trayIconPaused ?? _trayIconNormal ?? System.Drawing.SystemIcons.Application;
                 _trayIcon.Text = "护眼助手 - 休息倒计时已暂停";
+                if (_trayPauseResumeItem != null)
+                    _trayPauseResumeItem.Text = "恢复提醒";
                 _logService.Info("托盘图标已切换为暂停状态");
             }
             else
@@ -729,6 +842,8 @@ namespace eyesharp.ViewModels
                 // 正常运行状态
                 _trayIcon.Icon = _trayIconNormal ?? System.Drawing.SystemIcons.Application;
                 _trayIcon.Text = "护眼助手 - 休息倒计时中";
+                if (_trayPauseResumeItem != null)
+                    _trayPauseResumeItem.Text = "暂停提醒";
                 _logService.Info("托盘图标已切换为正常运行状态");
             }
         }
@@ -779,6 +894,7 @@ namespace eyesharp.ViewModels
             _timerService.MainCountdownElapsed -= OnMainCountdownElapsed;
             _timerService.RestCountdownTick -= OnRestCountdownTick;
             _timerService.RestCountdownElapsed -= OnRestCountdownElapsed;
+            _timerService.PreReminder -= OnPreReminder;
 
             // 释放托盘图标资源
             _trayIcon?.Dispose();

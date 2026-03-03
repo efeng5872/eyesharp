@@ -21,6 +21,7 @@ namespace eyesharp
         private static IServiceProvider? _serviceProvider;
         private static Mutex? _singleInstanceMutex;
         private static AppConfig? _currentConfig;
+        private static MainViewModel? _mainViewModel;
 
         // Windows API 用于跨进程窗口激活
         [DllImport("user32.dll", SetLastError = true)]
@@ -95,6 +96,12 @@ namespace eyesharp
                 logService?.SetLogLevel(_currentConfig.LogLevel);
                 logService?.Info("日志级别设置完成");
 
+                // 初始化主题
+                logService?.Info("准备初始化主题");
+                var themeService = ServiceProvider.GetService<IThemeService>();
+                themeService?.LoadTheme(_currentConfig.Theme);
+                logService?.Info("主题初始化完成");
+
                 // 清理旧日志
                 logService?.Info("准备清理旧日志");
                 var logCleanupService = ServiceProvider.GetService<LogCleanupService>();
@@ -130,11 +137,12 @@ namespace eyesharp
 
                 // 创建并显示主窗口
                 var timerService = ServiceProvider.GetService<ITimerService>();
+                var statisticsService = ServiceProvider.GetService<IStatisticsService>();
                 logService?.Info("开始创建 MainViewModel");
-                var mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, _currentConfig);
+                _mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, statisticsService!, themeService!, _currentConfig);
                 logService?.Info("MainViewModel 创建成功");
 
-                var mainWindow = new MainWindow(mainViewModel);
+                var mainWindow = new MainWindow(_mainViewModel);
                 logService?.Info("MainWindow 创建成功，准备显示");
 
                 logService?.Info("即将调用 mainWindow.Show()");
@@ -162,6 +170,9 @@ namespace eyesharp
         {
             var logService = _serviceProvider?.GetService<ILogService>();
             logService?.Info("应用程序退出");
+
+            // 释放 MainViewModel（包含托盘图标清理）
+            _mainViewModel?.Dispose();
 
             // 释放互斥体
             _singleInstanceMutex?.ReleaseMutex();
@@ -263,6 +274,8 @@ namespace eyesharp
             services.AddSingleton<IConfigService, ConfigService>();
             services.AddSingleton<IPasswordService, PasswordService>();
             services.AddSingleton<ITimerService, TimerService>();
+            services.AddSingleton<IStatisticsService, StatisticsService>();
+            services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<LogCleanupService>();
 
             _serviceProvider = services.BuildServiceProvider();

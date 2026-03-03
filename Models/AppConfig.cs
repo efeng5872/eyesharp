@@ -54,5 +54,10 @@ namespace eyesharp.Models
         /// 预提醒时间间隔（秒），默认为 30,10 表示30秒和10秒各提醒一次
         /// </summary>
         public int[] PreReminderIntervals { get; set; } = { 30, 10 };
+
+        /// <summary>
+        /// 主题模式："light" 或 "dark"
+        /// </summary>
+        public string Theme { get; set; } = "light";
     }
 }

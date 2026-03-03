@@ -86,6 +86,12 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private string _themeButtonText = "🌙 深色";
 
+        [ObservableProperty]
+        private string _themeButtonIcon = "🌙";
+
+        [ObservableProperty]
+        private string _themeButtonShortText = "深色";
+
         public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, IStatisticsService statisticsService, IThemeService themeService, AppConfig config)
         {
             _configService = configService;
@@ -113,6 +119,8 @@ namespace eyesharp.ViewModels
             // 初始化主题设置
             IsDarkTheme = _config.Theme == "dark";
             ThemeButtonText = IsDarkTheme ? "☀️ 浅色" : "🌙 深色";
+            ThemeButtonIcon = IsDarkTheme ? "☀️" : "🌙";
+            ThemeButtonShortText = IsDarkTheme ? "浅色" : "深色";
 
             // 同步开机自启动状态（以注册表实际状态为准）
             AutoStart = AutoStartHelper.IsAutoStartEnabled();
@@ -631,6 +639,8 @@ namespace eyesharp.ViewModels
 
                 // 更新按钮文本
                 ThemeButtonText = IsDarkTheme ? "☀️ 浅色" : "🌙 深色";
+                ThemeButtonIcon = IsDarkTheme ? "☀️" : "🌙";
+                ThemeButtonShortText = IsDarkTheme ? "浅色" : "深色";
 
                 // 应用主题
                 var theme = IsDarkTheme ? ThemeType.Dark : ThemeType.Light;
@@ -684,7 +694,7 @@ namespace eyesharp.ViewModels
                 _ = _statisticsService.SaveAsync();
 
                 // 创建并显示统计窗口
-                var statisticsWindow = new StatisticsWindow(_statisticsService, _logService);
+                var statisticsWindow = new StatisticsWindow(_statisticsService, _logService, _themeService);
                 statisticsWindow.ShowDialog();
             }
             catch (Exception ex)

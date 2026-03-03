@@ -16,16 +16,31 @@
         </Grid.RowDefinitions>
 
         <!-- 标题栏 -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="EyeSharp 护眼助手"
-                       FontSize="24"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <TextBlock Text="定时提醒休息，保护您的眼睛"
-                       FontSize="14"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       Margin="0,5,0,0"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="EyeSharp 护眼助手"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="定时提醒休息，保护您的眼睛"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+
+            <!-- 主题切换按钮 - 右上角 -->
+            <Button Grid.Column="1"
+                    Command="{Binding ToggleThemeCommand}"
+                    Style="{DynamicResource ThemeToggleButtonStyle}"
+                    ToolTip="切换亮色/深色主题"
+                    VerticalAlignment="Top"
+                    Content="{Binding ThemeButtonIcon}"/>
+        </Grid>
 
         <!-- 主内容区域 -->
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -309,61 +324,67 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="1"
-                        Content="隐藏"
-                        Command="{Binding HideToTrayCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"
-                        Margin="0,0,10,0"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- 系统操作组 -->
+                    <Button Command="{Binding HideToTrayCommand}"
+                            Style="{DynamicResource IconButtonStyle}"
+                            ToolTip="隐藏到系统托盘">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🪟" FontSize="14"/>
+                            <TextBlock Text="隐藏" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
 
-                <Button Grid.Column="2"
-                        Content="查看统计"
-                        Command="{Binding ViewStatisticsCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"
-                        Margin="0,0,10,0"/>
+                    <!-- 分隔线 -->
+                    <Border Style="{DynamicResource ButtonDividerStyle}"/>
 
-                <Button Grid.Column="3"
-                        Content="修改密码"
-                        Command="{Binding ChangePasswordCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"
-                        Margin="0,0,10,0"/>
+                    <!-- 数据查看组 -->
+                    <Button Command="{Binding ViewStatisticsCommand}"
+                            Style="{DynamicResource IconButtonStyle}"
+                            ToolTip="查看护眼数据统计">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📊" FontSize="14"/>
+                            <TextBlock Text="统计" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
 
-                <Button Grid.Column="4"
-                        Content="忘记密码"
-                        Command="{Binding ForgotPasswordCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"
-                        Margin="0,0,10,0"
-                        Background="#FF9800"
-                        Foreground="White"/>
+                    <!-- 分隔线 -->
+                    <Border Style="{DynamicResource ButtonDividerStyle}"/>
 
-                <Button Grid.Column="5"
-                        Content="{Binding ThemeButtonText}"
-                        Command="{Binding ToggleThemeCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"
-                        Margin="0,0,10,0"/>
+                    <!-- 安全设置组 -->
+                    <Button Command="{Binding ChangePasswordCommand}"
+                            Style="{DynamicResource IconButtonStyle}"
+                            ToolTip="修改休息窗口密码">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔐" FontSize="14"/>
+                            <TextBlock Text="改密" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
 
-                <Button Grid.Column="6"
-                        Content="退出程序"
-                        Command="{Binding ExitCommand}"
-                        Style="{DynamicResource PrimaryButtonStyle}"
-                        Width="100"
-                        Height="36"/>
+                    <Button Command="{Binding ForgotPasswordCommand}"
+                            Style="{DynamicResource WarningIconButtonStyle}"
+                            ToolTip="重置密码（将清除所有配置）">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚠️" FontSize="14"/>
+                            <TextBlock Text="重置" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 分隔线 -->
+                    <Border Style="{DynamicResource ButtonDividerStyle}"/>
+
+                    <!-- 退出组 -->
+                    <Button Command="{Binding ExitCommand}"
+                            Style="{DynamicResource DangerIconButtonStyle}"
+                            ToolTip="退出程序">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🚪" FontSize="14"/>
+                            <TextBlock Text="退出" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
             </Grid>
         </ScrollViewer>

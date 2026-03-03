@@ -14,15 +14,39 @@ namespace eyesharp.Views
     {
         private readonly IStatisticsService _statisticsService;
         private readonly ILogService _logService;
+        private readonly IThemeService _themeService;
 
-        public StatisticsWindow(IStatisticsService statisticsService, ILogService logService)
+        public StatisticsWindow(IStatisticsService statisticsService, ILogService logService, IThemeService themeService)
         {
             _statisticsService = statisticsService;
             _logService = logService;
+            _themeService = themeService;
 
             InitializeComponent();
 
             Loaded += OnLoaded;
+            Unloaded += OnUnloaded;
+        }
+
+        /// <summary>
+        /// 窗口卸载时取消订阅事件
+        /// </summary>
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            if (_themeService != null)
+            {
+                _themeService.ThemeChanged -= OnThemeChanged;
+            }
+        }
+
+        /// <summary>
+        /// 主题变更时刷新DataGrid样式
+        /// </summary>
+        private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            _logService.Info($"统计窗口响应主题变更: {e.NewTheme}");
+            // DynamicResource会自动更新，但需要强制刷新DataGrid
+            RecordsDataGrid?.Items?.Refresh();
         }
 
         /// <summary>
@@ -31,6 +55,13 @@ namespace eyesharp.Views
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             _logService.Info("统计窗口已加载");
+
+            // 订阅主题变更事件
+            if (_themeService != null)
+            {
+                _themeService.ThemeChanged += OnThemeChanged;
+            }
+
             RefreshStatistics();
         }
 

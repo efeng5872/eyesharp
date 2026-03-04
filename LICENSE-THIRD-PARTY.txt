@@ -1,0 +1,116 @@
+==============================================================================
+                          第三方开源组件许可证声明
+                         Third-Party License Notices
+==============================================================================
+
+本项目 EyeSharp 护眼助手 使用了以下第三方开源组件：
+
+------------------------------------------------------------------------------
+1. CommunityToolkit.Mvvm
+------------------------------------------------------------------------------
+版本: 8.2.2
+用途: MVVM框架（提供 ObservableObject、RelayCommand 等特性）
+许可证: MIT License
+版权所有: © .NET Foundation and Contributors
+项目地址: https://github.com/CommunityToolkit/dotnet
+
+------------------------------------------------------------------------------
+2. H.NotifyIcon.Wpf
+------------------------------------------------------------------------------
+版本: 2.0.0
+用途: 系统托盘图标支持
+许可证: MIT License
+版权所有: © havendv
+项目地址: https://github.com/HavenDV/H.NotifyIcon
+
+------------------------------------------------------------------------------
+3. NLog
+------------------------------------------------------------------------------
+版本: 5.3.2
+用途: 日志记录框架
+许可证: BSD-3-Clause License
+版权所有: © 2004-2024 NLog Project - https://nlog-project.org/
+项目地址: https://github.com/NLog/NLog
+
+------------------------------------------------------------------------------
+4. NLog.Extensions.Logging
+------------------------------------------------------------------------------
+版本: 5.3.2
+用途: NLog 与 Microsoft.Extensions.Logging 集成
+许可证: BSD-3-Clause License
+版权所有: © 2016-2024 NLog Project - https://nlog-project.org/
+项目地址: https://github.com/NLog/NLog.Extensions.Logging
+
+------------------------------------------------------------------------------
+5. Microsoft.Extensions.DependencyInjection
+------------------------------------------------------------------------------
+版本: 8.0.0
+用途: 依赖注入容器
+许可证: MIT License
+版权所有: © Microsoft Corporation
+项目地址: https://github.com/dotnet/runtime
+
+==============================================================================
+                            许可证全文
+==============================================================================
+
+------------------------------------------------------------------------------
+MIT License (MIT)
+------------------------------------------------------------------------------
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+BSD-3-Clause License
+------------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+==============================================================================
+                         免责声明 / Disclaimer
+==============================================================================
+
+本软件按"原样"提供，不提供任何形式的明示或暗示担保，包括但不限于对
+适销性、特定用途适用性和非侵权性的担保。
+
+上述第三方组件的版权归其 respective 所有者所有。本项目的作者不对这些
+第三方组件的内容、安全性或可用性承担任何责任。
+
+==============================================================================

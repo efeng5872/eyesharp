@@ -1,0 +1,32 @@
+EyeSharp 护眼助手
+Copyright 2025 EyeSharp Contributors
+
+This product includes software developed by the EyeSharp project.
+
+==============================================================================
+                           THIRD-PARTY DEPENDENCIES
+==============================================================================
+
+This software uses the following third-party libraries:
+
+1. CommunityToolkit.Mvvm
+   Copyright © .NET Foundation and Contributors
+   License: MIT
+
+2. H.NotifyIcon.Wpf
+   Copyright © havendv
+   License: MIT
+
+3. NLog
+   Copyright © 2004-2024 NLog Project
+   License: BSD-3-Clause
+
+4. NLog.Extensions.Logging
+   Copyright © 2016-2024 NLog Project
+   License: BSD-3-Clause
+
+5. Microsoft.Extensions.DependencyInjection
+   Copyright © Microsoft Corporation
+   License: MIT
+
+For detailed license information, please see LICENSE-THIRD-PARTY.txt

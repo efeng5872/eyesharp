@@ -36,7 +36,7 @@
                     Click="OnCancelClick"
                     Style="{StaticResource PrimaryButtonStyle}"/>
 
-            <Button Content="确定退出"
+            <Button Content="确认"
                     Width="80"
                     Height="32"
                     Click="OnConfirmClick"

@@ -390,19 +390,6 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <!-- 系统操作组 -->
-                    <Button Command="{Binding HideToTrayCommand}"
-                            Style="{DynamicResource IconButtonStyle}"
-                            ToolTip="隐藏到系统托盘">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🪟" FontSize="14"/>
-                            <TextBlock Text="隐藏" FontSize="14" Margin="5,0,0,0"/>
-                        </StackPanel>
-                    </Button>
-
-                    <!-- 分隔线 -->
-                    <Border Style="{DynamicResource ButtonDividerStyle}"/>
-
                     <!-- 数据查看组 -->
                     <Button Command="{Binding ViewStatisticsCommand}"
                             Style="{DynamicResource IconButtonStyle}"
@@ -438,7 +425,16 @@
                     <!-- 分隔线 -->
                     <Border Style="{DynamicResource ButtonDividerStyle}"/>
 
-                    <!-- 退出组 -->
+                    <!-- 系统操作组：隐藏 + 退出 -->
+                    <Button Command="{Binding HideToTrayCommand}"
+                            Style="{DynamicResource IconButtonStyle}"
+                            ToolTip="隐藏到系统托盘">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🪟" FontSize="14"/>
+                            <TextBlock Text="隐藏" FontSize="14" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button Command="{Binding ExitCommand}"
                             Style="{DynamicResource DangerIconButtonStyle}"
                             ToolTip="退出程序">

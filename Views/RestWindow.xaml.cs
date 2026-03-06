@@ -118,11 +118,10 @@ namespace eyesharp.Views
             Width = primaryScreen.Bounds.Width;
             Height = primaryScreen.Bounds.Height;
 
-            // 确保窗口在最前面并激活
+            // 确保窗口在最前面
+            // 注意：不在这里调用 Show()/Activate()，因为在 ShowRestWindow 中已经调用
+            // 锁屏状态下重复调用会导致死锁
             Topmost = true;
-            Show();
-            Activate();
-            Focus();
 
             _logService.Info($"休息窗口已设置全屏: {Width}x{Height} at ({Left},{Top})");
         }

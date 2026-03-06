@@ -328,6 +328,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <!-- 卡片标题 -->
@@ -368,8 +369,42 @@
                                       HorizontalAlignment="Left"/>
                         </Grid>
 
+                        <!-- 锁屏处理方式 -->
+                        <Grid Grid.Row="3" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="锁屏处理："
+                                       FontSize="14"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <RadioButton Content="正常显示"
+                                             GroupName="LockScreenBehavior"
+                                             IsChecked="{Binding IsLockScreenBehaviorNormal}"
+                                             Margin="0,0,15,0"
+                                             FontSize="14"
+                                             ToolTip="锁屏时正常显示休息窗口（解锁后可见）"/>
+                                <RadioButton Content="暂停倒计时"
+                                             GroupName="LockScreenBehavior"
+                                             IsChecked="{Binding IsLockScreenBehaviorPause}"
+                                             Margin="0,0,15,0"
+                                             FontSize="14"
+                                             ToolTip="锁屏时暂停倒计时，解锁后继续"/>
+                                <RadioButton Content="跳过休息"
+                                             GroupName="LockScreenBehavior"
+                                             IsChecked="{Binding IsLockScreenBehaviorSkip}"
+                                             FontSize="14"
+                                             ToolTip="锁屏时跳过本次休息提醒"/>
+                            </StackPanel>
+                        </Grid>
+
                         <!-- 保存按钮 -->
-                        <Button Grid.Row="3"
+                        <Button Grid.Row="4"
                                 Content="保存所有设置"
                                 Command="{Binding ApplySettingsCommand}"
                                 Style="{DynamicResource PrimaryButtonStyle}"

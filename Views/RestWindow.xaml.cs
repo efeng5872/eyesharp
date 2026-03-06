@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -46,6 +47,10 @@ namespace eyesharp.Views
 
         // 错误消息恢复定时器
         private System.Windows.Threading.DispatcherTimer? _errorResetTimer;
+
+        // Windows API 锁屏函数
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool LockWorkStation();
 
         public RestWindow(IConfigService configService, IPasswordService passwordService, ILogService logService, AppConfig config, TimerState previousState)
         {
@@ -151,15 +156,15 @@ namespace eyesharp.Views
         {
             if (_config.IsForcedMode)
             {
-                // 强制模式：显示密码输入
+                // 强制模式：显示密码输入和锁屏选项
                 ForcedModePanel.Visibility = Visibility.Visible;
-                SkipRestButton.Visibility = Visibility.Collapsed;
+                NonForcedModePanel.Visibility = Visibility.Collapsed;
             }
             else
             {
-                // 非强制模式：显示跳过按钮
+                // 非强制模式：显示跳过按钮和锁屏选项
                 ForcedModePanel.Visibility = Visibility.Collapsed;
-                SkipRestButton.Visibility = Visibility.Visible;
+                NonForcedModePanel.Visibility = Visibility.Visible;
             }
         }
 
@@ -581,6 +586,9 @@ namespace eyesharp.Views
         /// </summary>
         protected override void OnClosed(EventArgs e)
         {
+            // 检查是否需要锁屏
+            CheckAndLockWorkStation();
+
             // 取消事件订阅
             Loaded -= OnLoaded;
             KeyDown -= OnKeyDown;
@@ -591,6 +599,45 @@ namespace eyesharp.Views
 
             _logService.Info("休息窗口已关闭");
             base.OnClosed(e);
+        }
+
+        /// <summary>
+        /// 检查并执行锁屏
+        /// </summary>
+        private void CheckAndLockWorkStation()
+        {
+            try
+            {
+                // 获取当前激活的锁屏复选框状态
+                bool shouldLock = false;
+
+                if (_config.IsForcedMode && LockAfterRestCheckBox.IsChecked == true)
+                {
+                    shouldLock = true;
+                }
+                else if (!_config.IsForcedMode && LockAfterRestCheckBoxNonForced.IsChecked == true)
+                {
+                    shouldLock = true;
+                }
+
+                if (shouldLock)
+                {
+                    _logService.Info("用户选择了休息结束后锁屏，正在执行锁屏操作");
+                    bool result = LockWorkStation();
+                    if (result)
+                    {
+                        _logService.Info("锁屏操作执行成功");
+                    }
+                    else
+                    {
+                        _logService.Warn("锁屏操作执行失败");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "执行锁屏操作时发生错误");
+            }
         }
     }
 }

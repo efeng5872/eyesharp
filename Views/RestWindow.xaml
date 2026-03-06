@@ -59,7 +59,7 @@
                            Margin="0,0,10,0"/>
                 <PasswordBox x:Name="PasswordBox"
                              FontSize="14"
-                             Width="150"
+                             Width="100"
                              Height="30"
                              VerticalAlignment="Center"
                              Margin="0,0,10,0"
@@ -99,6 +99,19 @@
                         </Style>
                     </Button.Style>
                 </Button>
+                <!-- 结束锁屏复选框 -->
+                <CheckBox x:Name="LockAfterRestCheckBox"
+                          VerticalAlignment="Center"
+                          Margin="0,0,15,0"
+                          Cursor="Hand"
+                          ToolTipService.InitialShowDelay="1000"
+                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全">
+                    <TextBlock Text="结束锁屏"
+                               FontSize="14"
+                               Foreground="#808080"
+                               VerticalAlignment="Center"/>
+                </CheckBox>
+
                 <Button Content="提前结束"
                         Click="OnEndRestClick"
                         Width="80"
@@ -133,41 +146,57 @@
                 </Button>
             </StackPanel>
 
-            <!-- 非强制模式：跳过休息按钮 -->
-            <Button x:Name="SkipRestButton"
-                    Content="跳过休息"
-                    Click="OnSkipRestClick"
-                    Width="80"
-                    Height="30"
-                    FontSize="14"
-                    Background="#404040"
-                    Foreground="White"
-                    BorderThickness="0"
-                    Cursor="Hand"
-                    Visibility="Collapsed"
-                    Margin="0,0,20,0">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="Button">
-                                    <Border Background="{TemplateBinding Background}"
-                                            CornerRadius="4"
-                                            Padding="{TemplateBinding Padding}">
-                                        <ContentPresenter HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#606060"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
+            <!-- 非强制模式：跳过休息按钮和锁屏复选框 -->
+            <StackPanel x:Name="NonForcedModePanel"
+                        Orientation="Horizontal"
+                        Visibility="Collapsed"
+                        Margin="0,0,20,0">
+                <!-- 结束锁屏复选框 -->
+                <CheckBox x:Name="LockAfterRestCheckBoxNonForced"
+                          VerticalAlignment="Center"
+                          Margin="0,0,15,0"
+                          Cursor="Hand"
+                          ToolTipService.InitialShowDelay="1000"
+                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全">
+                    <TextBlock Text="结束锁屏"
+                               FontSize="14"
+                               Foreground="#808080"
+                               VerticalAlignment="Center"/>
+                </CheckBox>
+
+                <Button x:Name="SkipRestButton"
+                        Content="跳过休息"
+                        Click="OnSkipRestClick"
+                        Width="80"
+                        Height="30"
+                        FontSize="14"
+                        Background="#404040"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="4"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#606060"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
 
             <!-- 倒计时显示 -->
             <TextBlock x:Name="CountdownText"

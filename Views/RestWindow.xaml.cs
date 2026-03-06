@@ -17,6 +17,18 @@ using eyesharp.Services;
 namespace eyesharp.Views
 {
     /// <summary>
+    /// Windows API 用于检测锁屏状态
+    /// </summary>
+    internal static class Win32Helper
+    {
+        [DllImport("user32.dll")]
+        public static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseDesktop(IntPtr hDesktop);
+    }
+    /// <summary>
     /// RestWindow.xaml 的交互逻辑
     /// </summary>
     public partial class RestWindow : Window
@@ -375,6 +387,30 @@ namespace eyesharp.Views
         }
 
         /// <summary>
+        /// 结束锁屏复选框勾选事件（强制模式）- 勾选后立即禁用，防止他人取消
+        /// </summary>
+        private void OnLockAfterRestChecked(object sender, RoutedEventArgs e)
+        {
+            if (LockAfterRestCheckBox.IsChecked == true)
+            {
+                LockAfterRestCheckBox.IsEnabled = false;
+                _logService.Info("用户勾选了'结束锁屏'（强制模式），复选框已禁用以防止他人取消");
+            }
+        }
+
+        /// <summary>
+        /// 结束锁屏复选框勾选事件（非强制模式）- 勾选后立即禁用，防止他人取消
+        /// </summary>
+        private void OnLockAfterRestCheckedNonForced(object sender, RoutedEventArgs e)
+        {
+            if (LockAfterRestCheckBoxNonForced.IsChecked == true)
+            {
+                LockAfterRestCheckBoxNonForced.IsEnabled = false;
+                _logService.Info("用户勾选了'结束锁屏'（非强制模式），复选框已禁用以防止他人取消");
+            }
+        }
+
+        /// <summary>
         /// 提前结束按钮点击（强制模式）
         /// </summary>
         private void OnEndRestClick(object sender, RoutedEventArgs e)
@@ -543,11 +579,33 @@ namespace eyesharp.Views
         }
 
         /// <summary>
+        /// 检测系统是否处于锁屏状态
+        /// </summary>
+        private bool IsWorkstationLocked()
+        {
+            try
+            {
+                const uint DESKTOP_READOBJECTS = 0x0001;
+                IntPtr hDesktop = Win32Helper.OpenInputDesktop(0, false, DESKTOP_READOBJECTS);
+                if (hDesktop == IntPtr.Zero)
+                {
+                    return true; // 锁屏状态
+                }
+                Win32Helper.CloseDesktop(hDesktop);
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// 启动置顶恢复定时器
         /// </summary>
         private void StartTopmostRestoreTimer()
         {
-            // 使用 DispatcherTimer 避免线程切换，延长检测间隔到5秒
+            // 使用 DispatcherTimer 避免线程切换
             _topmostRestoreTimer = new System.Windows.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(TopmostCheckIntervalSeconds)
@@ -556,6 +614,12 @@ namespace eyesharp.Views
             {
                 try
                 {
+                    // 检测是否锁屏，锁屏时不执行置顶操作
+                    if (IsWorkstationLocked())
+                    {
+                        return;
+                    }
+
                     // 检测并恢复置顶状态
                     if (!Topmost)
                     {

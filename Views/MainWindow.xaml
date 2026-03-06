@@ -407,6 +407,7 @@
                         <Button Grid.Row="4"
                                 Content="保存所有设置"
                                 Command="{Binding ApplySettingsCommand}"
+                                IsEnabled="{Binding IsSettingsEnabled}"
                                 Style="{DynamicResource PrimaryButtonStyle}"
                                 HorizontalAlignment="Right"
                                 Width="120"

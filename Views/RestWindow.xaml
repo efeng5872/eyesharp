@@ -104,8 +104,9 @@
                           VerticalAlignment="Center"
                           Margin="0,0,15,0"
                           Cursor="Hand"
+                          Checked="OnLockAfterRestChecked"
                           ToolTipService.InitialShowDelay="1000"
-                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全">
+                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全（勾选后不可取消）">
                     <TextBlock Text="结束锁屏"
                                FontSize="14"
                                Foreground="#808080"
@@ -156,8 +157,9 @@
                           VerticalAlignment="Center"
                           Margin="0,0,15,0"
                           Cursor="Hand"
+                          Checked="OnLockAfterRestCheckedNonForced"
                           ToolTipService.InitialShowDelay="1000"
-                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全">
+                          ToolTipService.ToolTip="休息结束后自动锁定电脑，保护隐私安全（勾选后不可取消）">
                     <TextBlock Text="结束锁屏"
                                FontSize="14"
                                Foreground="#808080"

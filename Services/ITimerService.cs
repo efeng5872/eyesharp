@@ -49,6 +49,11 @@ namespace eyesharp.Services
         event EventHandler? RestCountdownElapsed;
 
         /// <summary>
+        /// 跳过休息事件（策略3：锁屏时跳过）
+        /// </summary>
+        event EventHandler? SkipRest;
+
+        /// <summary>
         /// 休息前预提醒事件
         /// </summary>
         event EventHandler<PreReminderEventArgs>? PreReminder;
@@ -82,6 +87,27 @@ namespace eyesharp.Services
         /// 重置定时器
         /// </summary>
         void Reset();
+
+        /// <summary>
+        /// 设置锁屏处理行为
+        /// </summary>
+        /// <param name="behavior">行为类型："normal"=正常显示, "pause"=暂停倒计时, "skip"=跳过休息</param>
+        void SetLockScreenBehavior(string behavior);
+
+        /// <summary>
+        /// 获取当前锁屏处理行为
+        /// </summary>
+        string GetLockScreenBehavior();
+
+        /// <summary>
+        /// 通知 TimerService 系统已锁屏
+        /// </summary>
+        void NotifyWorkstationLocked();
+
+        /// <summary>
+        /// 通知 TimerService 系统已解锁
+        /// </summary>
+        void NotifyWorkstationUnlocked();
     }
 
     /// <summary>

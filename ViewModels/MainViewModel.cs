@@ -82,6 +82,7 @@ namespace eyesharp.ViewModels
 
         // 锁屏相关状态
         private bool _wasPausedDueToLockScreen = false;
+        private bool _pendingRestWindow = false;
 
         [ObservableProperty]
         private string _selectedLogLevel = "INFO";
@@ -173,6 +174,7 @@ namespace eyesharp.ViewModels
             _timerService.RestCountdownTick += OnRestCountdownTick;
             _timerService.RestCountdownElapsed += OnRestCountdownElapsed;
             _timerService.PreReminder += OnPreReminder;
+            _timerService.SkipRest += OnSkipRest;
 
             // 订阅系统会话切换事件（用于检测锁屏/解锁）
             SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -267,6 +269,65 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 检测当前是否正在锁屏（简单实现）
+        /// </summary>
+        private bool IsCurrentlyLocked()
+        {
+            try
+            {
+                // 使用 WTS API 检测当前会话状态
+                int sessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+                IntPtr pBuffer = IntPtr.Zero;
+                uint bytesReturned;
+
+                if (WTSQuerySessionInformation(IntPtr.Zero, sessionId, WTS_INFO_CLASS.WTSConnectState, out pBuffer, out bytesReturned))
+                {
+                    try
+                    {
+                        int state = Marshal.ReadInt32(pBuffer);
+                        // WTSActive = 正常登录且未锁屏
+                        return state != (int)WTS_CONNECTSTATE_CLASS.WTSActive;
+                    }
+                    finally
+                    {
+                        WTSFreeMemory(pBuffer);
+                    }
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // WTS API 声明
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, WTS_INFO_CLASS wtsInfoClass, out IntPtr ppBuffer, out uint pBytesReturned);
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern void WTSFreeMemory(IntPtr pMemory);
+
+        private enum WTS_INFO_CLASS
+        {
+            WTSConnectState = 8
+        }
+
+        private enum WTS_CONNECTSTATE_CLASS
+        {
+            WTSActive,
+            WTSConnected,
+            WTSConnectQuery,
+            WTSShadow,
+            WTSDisconnected,
+            WTSIdle,
+            WTSListen,
+            WTSReset,
+            WTSDown,
+            WTSInit
+        }
+
+        /// <summary>
         /// 主倒计时结束处理（触发休息窗口）
         /// </summary>
         private void OnMainCountdownElapsed(object? sender, EventArgs e)
@@ -276,6 +337,16 @@ namespace eyesharp.ViewModels
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
+                    var behavior = _config.LockScreenBehavior ?? "normal";
+
+                    // 策略1：如果当前锁屏，延迟到解锁后显示
+                    if (behavior == "normal" && IsCurrentlyLocked())
+                    {
+                        _logService.Info("主倒计时结束，但当前处于锁屏状态，延迟显示休息窗口");
+                        _pendingRestWindow = true;
+                        return;
+                    }
+
                     _logService.Info("主倒计时结束，显示休息窗口");
                     ShowRestWindow();
                 });
@@ -302,32 +373,50 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void OnRestCountdownElapsed(object? sender, EventArgs e)
         {
-            _logService.Info("休息倒计时结束，准备关闭休息窗口");
+            _logService.Info("[OnRestCountdownElapsed] 休息倒计时结束，准备关闭休息窗口");
 
-            // 标记休息已完成
-            _isRestCompleted = true;
-
-            // 先启动主倒计时（不阻塞）
-            StartCountdown();
-
-            // 异步关闭休息窗口，避免死锁
-            if (Application.Current?.Dispatcher != null)
+            try
             {
-                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                // 标记休息已完成
+                _isRestCompleted = true;
+
+                // 先启动主倒计时（不阻塞）
+                _logService.Info("[OnRestCountdownElapsed] 启动主倒计时...");
+                StartCountdown();
+                _logService.Info("[OnRestCountdownElapsed] 主倒计时已启动");
+
+                // 使用 Dispatcher.BeginInvoke 异步关闭窗口
+                // UI更新统一在 Closed 事件中处理，避免重复
+                if (Application.Current?.Dispatcher != null)
                 {
-                    _logService.Info("正在关闭休息窗口...");
-                    CloseRestWindow();
+                    _logService.Info("[OnRestCountdownElapsed] 调度关闭窗口操作...");
+                    Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            _logService.Info("[OnRestCountdownElapsed] 正在关闭休息窗口...");
+                            CloseRestWindow();
+                            _logService.Info("[OnRestCountdownElapsed] 休息窗口已关闭");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logService.Error($"[OnRestCountdownElapsed] BeginInvoke回调中发生异常: {ex.Message}\n{ex.StackTrace}");
+                        }
+                    }), System.Windows.Threading.DispatcherPriority.Normal);
 
-                    // 强制刷新UI状态
-                    StatusText = "运行中";
-                    PauseResumeButtonText = "暂停提醒";
-
-                    var initialTime = DateTimeHelper.FormatCountdown(_timerService.MainCountdownRemaining);
-                    CountdownText = initialTime;
-
-                    _logService.Info($"主倒计时已重启，当前显示: {initialTime}, 状态: {StatusText}");
-                }), System.Windows.Threading.DispatcherPriority.Normal);
+                    _logService.Info("[OnRestCountdownElapsed] 关闭窗口操作已调度（UI更新由Closed事件统一处理）");
+                }
+                else
+                {
+                    _logService.Error("[OnRestCountdownElapsed] Application.Current.Dispatcher 为 null，无法调度关闭窗口操作");
+                }
             }
+            catch (Exception ex)
+            {
+                _logService.Error($"[OnRestCountdownElapsed] 发生异常: {ex.Message}\n{ex.StackTrace}");
+            }
+
+            _logService.Info("[OnRestCountdownElapsed] 方法执行完成");
         }
 
         /// <summary>
@@ -356,50 +445,7 @@ namespace eyesharp.ViewModels
         {
             try
             {
-                var previousState = _timerService.State;
-                _logService.Info($"开始创建休息窗口，之前的状态: {previousState}");
-
-                // 开始记录休息统计
-                _isRestCompleted = false;
-                _statisticsService.StartRest(_config.RestDurationSeconds, _config.IsForcedMode);
-                _logService.Info("开始记录休息统计");
-
-                _currentRestWindow = new RestWindow(_configService, _passwordService, _logService, _config, previousState);
-
-                _logService.Info("休息窗口对象已创建");
-
-                // 当休息窗口关闭时，检查是否是正常结束还是提前结束
-                _currentRestWindow.Closed += (s, e) =>
-                {
-                    _logService.Info("休息窗口 Closed 事件触发");
-
-                    // 结束休息统计
-                    _statisticsService.EndRest(_isRestCompleted);
-                    _logService.Info($"休息统计已记录，完成状态: {_isRestCompleted}");
-
-                    if (_timerService.State == TimerState.Resting)
-                    {
-                        // 如果定时器还在 Resting 状态，说明是提前关闭的
-                        _logService.Info("休息窗口被提前关闭");
-                        CloseRestWindow();
-                        StartCountdown();
-                    }
-                };
-
-                _logService.Info("准备显示休息窗口，调用 Show() 方法");
-                _currentRestWindow.Show();
-                _logService.Info("Show() 方法已调用");
-
-                // 强制激活窗口
-                _currentRestWindow.Activate();
-                _logService.Info("窗口已激活");
-
-                _logService.Info("休息窗口已显示");
-
-                // 开始休息倒计时
-                var restDuration = TimeSpan.FromSeconds(_config.RestDurationSeconds);
-                _timerService.StartRestCountdown(restDuration);
-                _logService.Info($"休息倒计时已启动: {_config.RestDurationSeconds}秒");
+                ShowRestWindowInternal();
             }
             catch (Exception ex)
             {
@@ -410,14 +456,122 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
+        /// 显示休息窗口（内部实现，实际创建和显示窗口）
+        /// </summary>
+        private void ShowRestWindowInternal()
+        {
+            var previousState = _timerService.State;
+            _logService.Info($"开始创建休息窗口，之前的状态: {previousState}");
+
+            // 开始记录休息统计
+            _isRestCompleted = false;
+            _statisticsService.StartRest(_config.RestDurationSeconds, _config.IsForcedMode);
+            _logService.Info("开始记录休息统计");
+
+            _currentRestWindow = new RestWindow(_configService, _passwordService, _logService, _config, previousState);
+
+            // 休息期间禁用设置保存
+            IsSettingsEnabled = false;
+            _logService.Info("休息窗口对象已创建，设置保存已禁用");
+
+            // 当休息窗口关闭时，检查是否是正常结束还是提前结束
+            _currentRestWindow.Closed += (s, e) =>
+            {
+                _logService.Info("休息窗口 Closed 事件触发");
+
+                // 结束休息统计
+                _statisticsService.EndRest(_isRestCompleted);
+                _logService.Info($"休息统计已记录，完成状态: {_isRestCompleted}");
+
+                // 清理引用，避免重复关闭
+                _currentRestWindow = null;
+
+                // 使用 BeginInvoke 异步检查状态，避免与 Timer 线程死锁
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        // 恢复设置保存按钮
+                        IsSettingsEnabled = true;
+                        _logService.Info("休息窗口已关闭，设置保存已恢复");
+
+                        var currentState = _timerService.State;
+                        var mainRemaining = _timerService.MainCountdownRemaining;
+                        var restRemaining = _timerService.RestCountdownRemaining;
+                        _logService.Info($"[诊断] Closed事件: State={currentState}, MainRemaining={mainRemaining}, RestRemaining={restRemaining}, _isRestCompleted={_isRestCompleted}");
+
+                        if (currentState == TimerState.Resting)
+                        {
+                            // 如果定时器还在 Resting 状态，说明是提前关闭的
+                            _logService.Info("休息窗口被提前关闭，需要启动主倒计时");
+                            StartCountdown();
+                        }
+                        else if (currentState == TimerState.Running && mainRemaining == 0)
+                        {
+                            // 异常情况：State是Running但倒计时为0，需要重启
+                            _logService.Warn("[诊断] 检测到异常状态：Running但MainRemaining=0，强制重启倒计时");
+                            StartCountdown();
+                        }
+                        else
+                        {
+                            _logService.Info($"休息窗口正常关闭，状态已是 {currentState}，无需重启倒计时");
+                        }
+
+                        // 强制刷新UI状态
+                        StatusText = "运行中";
+                        PauseResumeButtonText = "暂停提醒";
+
+                        // 更新倒计时显示
+                        var remainingSeconds = _timerService.MainCountdownRemaining;
+                        var initialTime = DateTimeHelper.FormatCountdown(remainingSeconds);
+                        CountdownText = initialTime;
+
+                        // 重置进度条
+                        CountdownProgress = 0;
+
+                        _logService.Info($"主界面UI状态已更新: 倒计时={initialTime}, 剩余秒数={remainingSeconds}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.Error($"Closed事件处理异常: {ex.Message}\n{ex.StackTrace}");
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Normal);
+            };
+
+            _logService.Info("准备显示休息窗口，调用 Show() 方法");
+            _currentRestWindow.Show();
+            _logService.Info("Show() 方法已调用");
+
+            // 强制激活窗口
+            _currentRestWindow.Activate();
+            _logService.Info("窗口已激活");
+
+            _logService.Info("休息窗口已显示");
+
+            // 开始休息倒计时
+            var restDuration = TimeSpan.FromSeconds(_config.RestDurationSeconds);
+            _timerService.StartRestCountdown(restDuration);
+            _logService.Info($"休息倒计时已启动: {_config.RestDurationSeconds}秒");
+        }
+
+        /// <summary>
         /// 关闭休息窗口
         /// </summary>
         private void CloseRestWindow()
         {
             if (_currentRestWindow != null)
             {
-                _currentRestWindow.Close();
-                _currentRestWindow = null;
+                var window = _currentRestWindow;
+                _currentRestWindow = null; // 先清空引用，避免重复关闭
+                try
+                {
+                    window.Close();
+                    _logService.Info("CloseRestWindow: 窗口已关闭");
+                }
+                catch (Exception ex)
+                {
+                    _logService.Error($"CloseRestWindow: 关闭窗口时发生异常: {ex.Message}");
+                }
             }
         }
 
@@ -493,6 +647,9 @@ namespace eyesharp.ViewModels
                 {
                     concreteTimerService.IsPreReminderEnabled = IsPreReminderEnabled;
                 }
+
+                // 同步锁屏行为到 TimerService
+                _timerService.SetLockScreenBehavior(_config.LockScreenBehavior);
 
                 // 保存配置
                 await _configService.SaveConfigAsync(_config);
@@ -807,7 +964,22 @@ namespace eyesharp.ViewModels
             IsLockScreenBehaviorPause = behavior == "pause";
             IsLockScreenBehaviorSkip = behavior == "skip";
 
+            // 同步到 TimerService
+            _timerService.SetLockScreenBehavior(behavior);
+
             _logService.Info($"锁屏处理行为初始化: {behavior}");
+        }
+
+        /// <summary>
+        /// 处理跳过休息事件（策略3：锁屏时跳过）
+        /// </summary>
+        private void OnSkipRest(object? sender, EventArgs e)
+        {
+            _logService.Info("收到跳过休息事件（策略3），直接开始下一次倒计时");
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                StartCountdown();
+            });
         }
 
         /// <summary>
@@ -1016,6 +1188,7 @@ namespace eyesharp.ViewModels
             _timerService.RestCountdownTick -= OnRestCountdownTick;
             _timerService.RestCountdownElapsed -= OnRestCountdownElapsed;
             _timerService.PreReminder -= OnPreReminder;
+            _timerService.SkipRest -= OnSkipRest;
 
             // 取消系统事件订阅
             SystemEvents.SessionSwitch -= OnSessionSwitch;
@@ -1067,6 +1240,9 @@ namespace eyesharp.ViewModels
             var behavior = _config.LockScreenBehavior ?? "normal";
             _logService.Info($"锁屏处理方式: {behavior}");
 
+            // 通知 TimerService 系统已锁屏（用于策略1和3的检测）
+            _timerService.NotifyWorkstationLocked();
+
             switch (behavior)
             {
                 case "pause":
@@ -1081,15 +1257,9 @@ namespace eyesharp.ViewModels
                     break;
 
                 case "skip":
-                    // 方案3: 如果正在休息，则提前结束
-                    if (_timerService.State == TimerState.Resting && _currentRestWindow != null)
-                    {
-                        _logService.Info("锁屏导致跳过本次休息");
-                        Application.Current?.Dispatcher?.Invoke(() =>
-                        {
-                            _currentRestWindow?.Close();
-                        });
-                    }
+                    // 方案3: 主倒计时期间锁屏会跳过休息（在TimerService中处理）
+                    // 休息期间锁屏不做特殊处理，让休息正常完成
+                    _logService.Info("锁屏处理（策略3）：休息期间锁屏，让休息正常完成");
                     break;
 
                 case "normal":
@@ -1107,13 +1277,24 @@ namespace eyesharp.ViewModels
         {
             var behavior = _config.LockScreenBehavior ?? "normal";
 
+            // 通知 TimerService 系统已解锁
+            _timerService.NotifyWorkstationUnlocked();
+
+            // 方案2: 恢复倒计时
             if (behavior == "pause" && _wasPausedDueToLockScreen)
             {
-                // 方案2: 恢复倒计时
                 _timerService.Resume();
                 _wasPausedDueToLockScreen = false;
                 _logService.Info("解锁后恢复倒计时");
                 ShowToast("▶️ 已恢复倒计时");
+            }
+
+            // 方案1: 处理延迟显示的休息窗口
+            if (_pendingRestWindow)
+            {
+                _pendingRestWindow = false;
+                _logService.Info("检测到待显示的休息窗口，解锁后显示");
+                ShowRestWindow();
             }
         }
     }

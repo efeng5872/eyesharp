@@ -279,14 +279,20 @@ namespace eyesharp.Services
             }
             private set
             {
+                TimerStateChangedEventArgs? eventArgs = null;
                 lock (_lock)
                 {
                     if (_state != value)
                     {
                         var oldState = _state;
                         _state = value;
-                        StateChanged?.Invoke(this, new TimerStateChangedEventArgs(oldState, value));
+                        eventArgs = new TimerStateChangedEventArgs(oldState, value);
                     }
+                }
+                // 在锁外触发事件，避免死锁
+                if (eventArgs != null)
+                {
+                    StateChanged?.Invoke(this, eventArgs);
                 }
             }
         }

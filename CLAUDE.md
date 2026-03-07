@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 项目结构重要提醒
+
+### 测试项目位置
+**自动化测试项目位于主项目的兄弟目录中**：
+- 主项目：`D:\java\ClaudeCode\eyesharp\` (当前目录)
+- 测试项目：`D:\java\ClaudeCode\eyesharp.Tests\` (相对路径 `../eyesharp.Tests/`)
+
+**执行测试命令**：
+```bash
+dotnet test ../eyesharp.Tests/eyesharp.Tests.csproj
+```
+
+**修改测试代码时需注意**：
+- 测试代码位于 `../eyesharp.Tests/` 目录下
+- 包含单元测试（Services/）和集成测试（Integration/）
+- 修改后需要单独处理提交（测试项目不是 git 子模块）
+
+---
+
 ## 软件项目开发全流程规范
 ### 一、流程总纲
 为规范软件项目全生命周期开发行为，保障交付质量与效率，项目开发需严格遵循「需求分析→设计→测试规划→开发→测试→Bug修复→部署」的分步流程，各阶段输出物需经用户确认、全量复核后，方可进入下一阶段；任一阶段发现核心问题无法解决，可回退至上一阶段并作废当前阶段所有工作。

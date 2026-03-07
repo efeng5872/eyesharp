@@ -54,6 +54,11 @@ namespace eyesharp.Services
         event EventHandler? SkipRest;
 
         /// <summary>
+        /// 等待解锁状态变化事件（策略3：到点且锁屏）
+        /// </summary>
+        event EventHandler<WaitForUnlockChangedEventArgs>? WaitForUnlockChanged;
+
+        /// <summary>
         /// 休息前预提醒事件
         /// </summary>
         event EventHandler<PreReminderEventArgs>? PreReminder;
@@ -91,33 +96,31 @@ namespace eyesharp.Services
         /// <summary>
         /// 设置锁屏处理行为
         /// </summary>
-        /// <param name="behavior">行为类型："normal"=正常显示, "pause"=暂停倒计时, "skip"=跳过休息</param>
-        void SetLockScreenBehavior(string behavior);
+        /// <param name="behavior">行为类型</param>
+        void SetLockScreenBehavior(LockScreenBehaviorType behavior);
 
         /// <summary>
         /// 获取当前锁屏处理行为
         /// </summary>
-        string GetLockScreenBehavior();
+        LockScreenBehaviorType GetLockScreenBehavior();
 
         /// <summary>
-        /// 通知 TimerService 系统已锁屏
+        /// 获取是否处于等待解锁状态（策略3：到点且锁屏）
         /// </summary>
-        void NotifyWorkstationLocked();
+        bool IsWaitingForUnlock { get; }
+    }
 
-        /// <summary>
-        /// 通知 TimerService 系统已解锁
-        /// </summary>
-        void NotifyWorkstationUnlocked();
+    /// <summary>
+    /// 等待解锁状态变化事件参数
+    /// </summary>
+    public class WaitForUnlockChangedEventArgs : EventArgs
+    {
+        public bool IsWaitingForUnlock { get; set; }
 
-        /// <summary>
-        /// 检查是否有待处理的跳过休息（策略3）
-        /// </summary>
-        bool HasPendingSkipRest();
-
-        /// <summary>
-        /// 清除待处理的跳过休息标志
-        /// </summary>
-        void ClearPendingSkipRest();
+        public WaitForUnlockChangedEventArgs(bool isWaitingForUnlock)
+        {
+            IsWaitingForUnlock = isWaitingForUnlock;
+        }
     }
 
     /// <summary>

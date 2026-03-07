@@ -273,10 +273,16 @@ namespace eyesharp
             services.AddSingleton<ILogService, LogService>();
             services.AddSingleton<IConfigService, ConfigService>();
             services.AddSingleton<IPasswordService, PasswordService>();
+            services.AddSingleton<ILockStateService>(provider =>
+            {
+                var logService = provider.GetService<ILogService>();
+                return new WindowsLockStateService(logService);
+            });
             services.AddSingleton<ITimerService>(provider =>
             {
                 var logService = provider.GetService<ILogService>();
-                return new TimerService(logService);
+                var lockStateService = provider.GetService<ILockStateService>();
+                return new TimerService(logService, lockStateService);
             });
             services.AddSingleton<IStatisticsService, StatisticsService>();
             services.AddSingleton<IThemeService, ThemeService>();

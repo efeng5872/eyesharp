@@ -388,18 +388,18 @@
                                              IsChecked="{Binding IsLockScreenBehaviorNormal}"
                                              Margin="0,0,15,0"
                                              FontSize="14"
-                                             ToolTip="锁屏时正常显示休息窗口（解锁后可见）"/>
+                                             ToolTip="与锁屏无关：主倒计时到点即进入休息流程"/>
                                 <RadioButton Content="暂停倒计时"
                                              GroupName="LockScreenBehavior"
                                              IsChecked="{Binding IsLockScreenBehaviorPause}"
                                              Margin="0,0,15,0"
                                              FontSize="14"
-                                             ToolTip="锁屏时暂停倒计时，解锁后继续"/>
+                                             ToolTip="主倒计时期间锁屏会暂停，解锁后自动恢复（休息期间不暂停）"/>
                                 <RadioButton Content="跳过休息"
                                              GroupName="LockScreenBehavior"
                                              IsChecked="{Binding IsLockScreenBehaviorSkip}"
                                              FontSize="14"
-                                             ToolTip="锁屏时跳过本次休息提醒"/>
+                                             ToolTip="仅到点时仍锁屏才跳过休息，解锁后开始新主倒计时"/>
                             </StackPanel>
                         </Grid>
 

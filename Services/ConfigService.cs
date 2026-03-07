@@ -185,6 +185,10 @@ namespace eyesharp.Services
             var validLogLevels = new[] { "DEBUG", "INFO", "WARN", "ERROR" };
             if (!validLogLevels.Contains(config.LogLevel?.ToUpper()))
                 config.LogLevel = "INFO";
+
+            // 锁屏处理行为（配置层 string，业务层会转换为 enum）
+            config.LockScreenBehavior = LockScreenBehaviorConverter.ToConfig(
+                LockScreenBehaviorConverter.FromConfig(config.LockScreenBehavior));
         }
 
         /// <summary>

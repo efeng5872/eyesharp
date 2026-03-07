@@ -1,9 +1,7 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -81,8 +79,7 @@ namespace eyesharp.ViewModels
         public string[] LogLevelOptions { get; } = { "DEBUG", "INFO", "WARN", "ERROR" };
 
         // 锁屏相关状态
-        private bool _wasPausedDueToLockScreen = false;
-        private bool _pendingRestWindow = false;
+        private bool _isWaitingForUnlock = false;
 
         [ObservableProperty]
         private string _selectedLogLevel = "INFO";
@@ -175,9 +172,7 @@ namespace eyesharp.ViewModels
             _timerService.RestCountdownElapsed += OnRestCountdownElapsed;
             _timerService.PreReminder += OnPreReminder;
             _timerService.SkipRest += OnSkipRest;
-
-            // 订阅系统会话切换事件（用于检测锁屏/解锁）
-            SystemEvents.SessionSwitch += OnSessionSwitch;
+            _timerService.WaitForUnlockChanged += OnWaitForUnlockChanged;
 
             // 配置预提醒
             if (_timerService is TimerService concreteTimerService)
@@ -223,7 +218,7 @@ namespace eyesharp.ViewModels
                     switch (e.NewState)
                     {
                         case TimerState.Running:
-                            StatusText = "运行中";
+                            StatusText = _isWaitingForUnlock ? "等待解锁" : "运行中";
                             PauseResumeButtonText = "暂停提醒";
                             // 同步托盘图标
                             UpdateTrayIconState(false);
@@ -269,65 +264,6 @@ namespace eyesharp.ViewModels
         }
 
         /// <summary>
-        /// 检测当前是否正在锁屏（简单实现）
-        /// </summary>
-        private bool IsCurrentlyLocked()
-        {
-            try
-            {
-                // 使用 WTS API 检测当前会话状态
-                int sessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
-                IntPtr pBuffer = IntPtr.Zero;
-                uint bytesReturned;
-
-                if (WTSQuerySessionInformation(IntPtr.Zero, sessionId, WTS_INFO_CLASS.WTSConnectState, out pBuffer, out bytesReturned))
-                {
-                    try
-                    {
-                        int state = Marshal.ReadInt32(pBuffer);
-                        // WTSActive = 正常登录且未锁屏
-                        return state != (int)WTS_CONNECTSTATE_CLASS.WTSActive;
-                    }
-                    finally
-                    {
-                        WTSFreeMemory(pBuffer);
-                    }
-                }
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // WTS API 声明
-        [DllImport("wtsapi32.dll", SetLastError = true)]
-        private static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, WTS_INFO_CLASS wtsInfoClass, out IntPtr ppBuffer, out uint pBytesReturned);
-
-        [DllImport("wtsapi32.dll", SetLastError = true)]
-        private static extern void WTSFreeMemory(IntPtr pMemory);
-
-        private enum WTS_INFO_CLASS
-        {
-            WTSConnectState = 8
-        }
-
-        private enum WTS_CONNECTSTATE_CLASS
-        {
-            WTSActive,
-            WTSConnected,
-            WTSConnectQuery,
-            WTSShadow,
-            WTSDisconnected,
-            WTSIdle,
-            WTSListen,
-            WTSReset,
-            WTSDown,
-            WTSInit
-        }
-
-        /// <summary>
         /// 主倒计时结束处理（触发休息窗口）
         /// </summary>
         private void OnMainCountdownElapsed(object? sender, EventArgs e)
@@ -337,16 +273,6 @@ namespace eyesharp.ViewModels
             {
                 Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    var behavior = _config.LockScreenBehavior ?? "normal";
-
-                    // 策略1：如果当前锁屏，延迟到解锁后显示
-                    if (behavior == "normal" && IsCurrentlyLocked())
-                    {
-                        _logService.Info("主倒计时结束，但当前处于锁屏状态，延迟显示休息窗口");
-                        _pendingRestWindow = true;
-                        return;
-                    }
-
                     _logService.Info("主倒计时结束，显示休息窗口");
                     ShowRestWindow();
                 }), System.Windows.Threading.DispatcherPriority.Background);
@@ -637,7 +563,8 @@ namespace eyesharp.ViewModels
                 _config.LogLevel = SelectedLogLevel;
                 _config.IsPreReminderEnabled = IsPreReminderEnabled;
                 _config.Theme = IsDarkTheme ? "dark" : "light";
-                _config.LockScreenBehavior = GetLockScreenBehavior();
+                var lockScreenBehaviorType = GetLockScreenBehaviorType();
+                _config.LockScreenBehavior = LockScreenBehaviorConverter.ToConfig(lockScreenBehaviorType);
 
                 // 应用日志级别变更
                 _logService.SetLogLevel(SelectedLogLevel);
@@ -649,7 +576,7 @@ namespace eyesharp.ViewModels
                 }
 
                 // 同步锁屏行为到 TimerService
-                _timerService.SetLockScreenBehavior(_config.LockScreenBehavior);
+                _timerService.SetLockScreenBehavior(lockScreenBehaviorType);
 
                 // 保存配置
                 await _configService.SaveConfigAsync(_config);
@@ -959,10 +886,10 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void InitializeLockScreenBehavior()
         {
-            var behavior = string.IsNullOrEmpty(_config.LockScreenBehavior) ? "normal" : _config.LockScreenBehavior;
-            IsLockScreenBehaviorNormal = behavior == "normal";
-            IsLockScreenBehaviorPause = behavior == "pause";
-            IsLockScreenBehaviorSkip = behavior == "skip";
+            var behavior = LockScreenBehaviorConverter.FromConfig(_config.LockScreenBehavior);
+            IsLockScreenBehaviorNormal = behavior == LockScreenBehaviorType.Normal;
+            IsLockScreenBehaviorPause = behavior == LockScreenBehaviorType.Pause;
+            IsLockScreenBehaviorSkip = behavior == LockScreenBehaviorType.Skip;
 
             // 同步到 TimerService
             _timerService.SetLockScreenBehavior(behavior);
@@ -976,20 +903,41 @@ namespace eyesharp.ViewModels
         private void OnSkipRest(object? sender, EventArgs e)
         {
             _logService.Info("收到跳过休息事件（策略3），直接开始下一次倒计时");
-            Application.Current?.Dispatcher?.Invoke(() =>
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
+                _isWaitingForUnlock = false;
+                StatusText = "运行中";
+                ShowToast("⏱️ 解锁后开始新的休息倒计时");
                 StartCountdown();
-            });
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private void OnWaitForUnlockChanged(object? sender, WaitForUnlockChangedEventArgs e)
+        {
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            {
+                _isWaitingForUnlock = e.IsWaitingForUnlock;
+                if (e.IsWaitingForUnlock)
+                {
+                    StatusText = "等待解锁";
+                    _logService.Info("进入等待解锁状态（策略3）");
+                }
+                else if (_timerService.State == TimerState.Running)
+                {
+                    StatusText = "运行中";
+                    _logService.Info("退出等待解锁状态（策略3）");
+                }
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>
         /// 获取当前锁屏处理行为字符串
         /// </summary>
-        private string GetLockScreenBehavior()
+        private LockScreenBehaviorType GetLockScreenBehaviorType()
         {
-            if (IsLockScreenBehaviorPause) return "pause";
-            if (IsLockScreenBehaviorSkip) return "skip";
-            return "normal";
+            if (IsLockScreenBehaviorPause) return LockScreenBehaviorType.Pause;
+            if (IsLockScreenBehaviorSkip) return LockScreenBehaviorType.Skip;
+            return LockScreenBehaviorType.Normal;
         }
 
         /// <summary>
@@ -1189,9 +1137,7 @@ namespace eyesharp.ViewModels
             _timerService.RestCountdownElapsed -= OnRestCountdownElapsed;
             _timerService.PreReminder -= OnPreReminder;
             _timerService.SkipRest -= OnSkipRest;
-
-            // 取消系统事件订阅
-            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            _timerService.WaitForUnlockChanged -= OnWaitForUnlockChanged;
 
             // 释放托盘图标资源
             _trayIcon?.Dispose();
@@ -1206,105 +1152,5 @@ namespace eyesharp.ViewModels
             _logService.Info("MainViewModel 已释放");
         }
 
-        /// <summary>
-        /// 系统会话切换事件处理（锁屏/解锁检测）
-        /// </summary>
-        private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
-        {
-            try
-            {
-                switch (e.Reason)
-                {
-                    case SessionSwitchReason.SessionLock:
-                        _logService.Info("检测到系统锁屏");
-                        HandleSessionLock();
-                        break;
-
-                    case SessionSwitchReason.SessionUnlock:
-                        _logService.Info("检测到系统解锁");
-                        HandleSessionUnlock();
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logService.Error(ex, "处理会话切换事件时发生错误");
-            }
-        }
-
-        /// <summary>
-        /// 处理系统锁屏
-        /// </summary>
-        private void HandleSessionLock()
-        {
-            var behavior = _config.LockScreenBehavior ?? "normal";
-            _logService.Info($"锁屏处理方式: {behavior}");
-
-            // 通知 TimerService 系统已锁屏（用于策略1和3的检测）
-            _timerService.NotifyWorkstationLocked();
-
-            switch (behavior)
-            {
-                case "pause":
-                    // 方案2: 暂停倒计时
-                    if (_timerService.State == TimerState.Running)
-                    {
-                        _timerService.Pause();
-                        _wasPausedDueToLockScreen = true;
-                        _logService.Info("锁屏导致倒计时暂停");
-                        ShowToast("⏸️ 已暂停倒计时（锁屏）");
-                    }
-                    break;
-
-                case "skip":
-                    // 方案3: 主倒计时期间锁屏会跳过休息（在TimerService中处理）
-                    // 休息期间锁屏不做特殊处理，让休息正常完成
-                    _logService.Info("锁屏处理（策略3）：休息期间锁屏，让休息正常完成");
-                    break;
-
-                case "normal":
-                default:
-                    // 方案1: 正常显示，不做特殊处理
-                    _logService.Info("锁屏时不做特殊处理");
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// 处理系统解锁
-        /// </summary>
-        private void HandleSessionUnlock()
-        {
-            var behavior = _config.LockScreenBehavior ?? "normal";
-
-            // 通知 TimerService 系统已解锁
-            _timerService.NotifyWorkstationUnlocked();
-
-            // 方案2: 恢复倒计时
-            if (behavior == "pause" && _wasPausedDueToLockScreen)
-            {
-                _timerService.Resume();
-                _wasPausedDueToLockScreen = false;
-                _logService.Info("解锁后恢复倒计时");
-                ShowToast("▶️ 已恢复倒计时");
-            }
-
-            // 方案1: 处理延迟显示的休息窗口
-            if (_pendingRestWindow)
-            {
-                _pendingRestWindow = false;
-                _logService.Info("检测到待显示的休息窗口，解锁后显示");
-                ShowRestWindow();
-            }
-
-            // 方案3: 处理待处理的跳过休息（倒计时期间锁屏，解锁后才开始新倒计时）
-            if (_timerService.HasPendingSkipRest())
-            {
-                _timerService.ClearPendingSkipRest();
-                _logService.Info("策略3(skip)：解锁后开始新的倒计时");
-                ShowToast("⏱️ 解锁后开始新的休息倒计时");
-                StartCountdown();
-            }
-        }
     }
 }

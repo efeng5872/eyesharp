@@ -1,3 +1,5 @@
+using System;
+
 namespace eyesharp.Models
 {
     /// <summary>
@@ -63,6 +65,48 @@ namespace eyesharp.Models
         /// <summary>
         /// 锁屏时的处理方式："pause"=暂停倒计时, "skip"=跳过本次休息, "normal"=正常显示
         /// </summary>
-        public string LockScreenBehavior { get; set; } = "pause";
+        public string LockScreenBehavior { get; set; } = LockScreenBehaviorConverter.PauseValue;
+    }
+
+    /// <summary>
+    /// 锁屏处理行为（业务层强类型）
+    /// </summary>
+    public enum LockScreenBehaviorType
+    {
+        Normal,
+        Pause,
+        Skip
+    }
+
+    /// <summary>
+    /// 锁屏处理行为转换器（配置层 string ↔ 业务层 enum）
+    /// </summary>
+    public static class LockScreenBehaviorConverter
+    {
+        public const string NormalValue = "normal";
+        public const string PauseValue = "pause";
+        public const string SkipValue = "skip";
+
+        public static LockScreenBehaviorType FromConfig(string? value)
+        {
+            if (string.Equals(value, SkipValue, StringComparison.OrdinalIgnoreCase))
+                return LockScreenBehaviorType.Skip;
+
+            if (string.Equals(value, NormalValue, StringComparison.OrdinalIgnoreCase))
+                return LockScreenBehaviorType.Normal;
+
+            // 默认：pause（与当前产品默认一致）
+            return LockScreenBehaviorType.Pause;
+        }
+
+        public static string ToConfig(LockScreenBehaviorType behavior)
+        {
+            return behavior switch
+            {
+                LockScreenBehaviorType.Normal => NormalValue,
+                LockScreenBehaviorType.Skip => SkipValue,
+                _ => PauseValue
+            };
+        }
     }
 }

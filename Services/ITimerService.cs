@@ -108,6 +108,16 @@ namespace eyesharp.Services
         /// 通知 TimerService 系统已解锁
         /// </summary>
         void NotifyWorkstationUnlocked();
+
+        /// <summary>
+        /// 检查是否有待处理的跳过休息（策略3）
+        /// </summary>
+        bool HasPendingSkipRest();
+
+        /// <summary>
+        /// 清除待处理的跳过休息标志
+        /// </summary>
+        void ClearPendingSkipRest();
     }
 
     /// <summary>

@@ -1296,6 +1296,15 @@ namespace eyesharp.ViewModels
                 _logService.Info("检测到待显示的休息窗口，解锁后显示");
                 ShowRestWindow();
             }
+
+            // 方案3: 处理待处理的跳过休息（倒计时期间锁屏，解锁后才开始新倒计时）
+            if (_timerService.HasPendingSkipRest())
+            {
+                _timerService.ClearPendingSkipRest();
+                _logService.Info("策略3(skip)：解锁后开始新的倒计时");
+                ShowToast("⏱️ 解锁后开始新的休息倒计时");
+                StartCountdown();
+            }
         }
     }
 }

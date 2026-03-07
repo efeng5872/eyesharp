@@ -32,6 +32,9 @@ namespace eyesharp.Services
         // 记录倒计时期间是否发生过锁屏
         private bool _wasLockedDuringCountdown = false;
 
+        // 记录是否有待处理的跳过休息（策略3：等解锁后再开始新倒计时）
+        private bool _pendingSkipRest = false;
+
         // Windows API 检测锁屏状态
         [DllImport("user32.dll")]
         private static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
@@ -180,6 +183,28 @@ namespace eyesharp.Services
         }
 
         /// <summary>
+        /// 检查是否有待处理的跳过休息（策略3）
+        /// </summary>
+        public bool HasPendingSkipRest()
+        {
+            lock (_lock)
+            {
+                return _pendingSkipRest;
+            }
+        }
+
+        /// <summary>
+        /// 清除待处理的跳过休息标志
+        /// </summary>
+        public void ClearPendingSkipRest()
+        {
+            lock (_lock)
+            {
+                _pendingSkipRest = false;
+            }
+        }
+
+        /// <summary>
         /// 获取当前锁屏处理行为
         /// </summary>
         public string GetLockScreenBehavior()
@@ -238,7 +263,8 @@ namespace eyesharp.Services
             lock (_lock)
             {
                 _wasLockedDuringCountdown = false;
-                _logService?.Debug("[TimerService] 重置锁屏标志");
+                _pendingSkipRest = false;
+                _logService?.Debug("[TimerService] 重置锁屏标志和待处理跳过标志");
             }
         }
 
@@ -498,11 +524,16 @@ namespace eyesharp.Services
             switch (behavior)
             {
                 case "skip":
-                    // 策略3：如果倒计时期间锁屏过，跳过休息
+                    // 策略3：如果倒计时期间锁屏过，设置标志等待解锁后再开始新倒计时
                     if (wasLocked)
                     {
-                        _logService?.Info("[TimerService] 策略3(skip)：倒计时期间曾锁屏，跳过本次休息");
-                        ResetAndStartMainCountdown();
+                        _logService?.Info("[TimerService] 策略3(skip)：倒计时期间曾锁屏，设置标志等待解锁后开始新倒计时");
+                        lock (_lock)
+                        {
+                            _pendingSkipRest = true;
+                        }
+                        // 停止定时器，不触发任何事件，等待解锁
+                        _timer?.Change(Timeout.Infinite, Timeout.Infinite);
                     }
                     else
                     {

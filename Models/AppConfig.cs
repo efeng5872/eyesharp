@@ -63,6 +63,6 @@ namespace eyesharp.Models
         /// <summary>
         /// 锁屏时的处理方式："pause"=暂停倒计时, "skip"=跳过本次休息, "normal"=正常显示
         /// </summary>
-        public string LockScreenBehavior { get; set; } = "normal";
+        public string LockScreenBehavior { get; set; } = "pause";
     }
 }

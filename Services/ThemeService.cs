@@ -93,6 +93,7 @@ namespace eyesharp.Services
                 resources["BorderBrush"] = new SolidColorBrush(Color.FromRgb(80, 80, 85));
                 resources["PrimaryBrush"] = new SolidColorBrush(Color.FromRgb(100, 181, 246));
                 resources["PrimaryDarkBrush"] = new SolidColorBrush(Color.FromRgb(66, 165, 245));
+                resources["PrimaryLightBrush"] = new SolidColorBrush(Color.FromRgb(144, 202, 249));
             }
             else
             {
@@ -105,6 +106,7 @@ namespace eyesharp.Services
                 resources["BorderBrush"] = new SolidColorBrush(Color.FromRgb(224, 224, 224));
                 resources["PrimaryBrush"] = new SolidColorBrush(Color.FromRgb(33, 150, 243));
                 resources["PrimaryDarkBrush"] = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+                resources["PrimaryLightBrush"] = new SolidColorBrush(Color.FromRgb(100, 181, 246));
             }
 
             _logService.Info($"主题资源已更新: {theme}");

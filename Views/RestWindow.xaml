@@ -59,11 +59,31 @@
                            Margin="0,0,10,0"/>
                 <PasswordBox x:Name="PasswordBox"
                              FontSize="14"
-                             Width="100"
+                             Width="80"
                              Height="30"
                              VerticalAlignment="Center"
                              Margin="0,0,10,0"
-                             KeyDown="OnPasswordKeyDown"/>
+                             Background="#404040"
+                             Foreground="White"
+                             BorderThickness="0"
+                             KeyDown="OnPasswordKeyDown">
+                    <PasswordBox.Style>
+                        <Style TargetType="PasswordBox">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="PasswordBox">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="4"
+                                                Padding="8,0">
+                                            <ScrollViewer x:Name="PART_ContentHost"
+                                                          VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </PasswordBox.Style>
+                </PasswordBox>
                 <!-- 重置按钮（密码错误3次后显示） -->
                 <Button x:Name="ResetButton"
                         Content="重置"

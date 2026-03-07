@@ -506,11 +506,11 @@ namespace eyesharp.Views
                     // 关闭休息窗口后退出程序
                     CloseRestWindow();
 
-                    // 退出程序
-                    Dispatcher.Invoke(() =>
+                    // 退出程序（使用BeginInvoke避免死锁）
+                    Dispatcher.BeginInvoke(new Action(() =>
                     {
                         Application.Current.Shutdown();
-                    });
+                    }), System.Windows.Threading.DispatcherPriority.Background);
                 }
                 catch (Exception ex)
                 {

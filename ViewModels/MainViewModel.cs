@@ -215,10 +215,10 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void OnTimerStateChanged(object? sender, TimerStateChangedEventArgs e)
         {
-            // 在UI线程中更新
+            // 在UI线程中更新（使用BeginInvoke避免死锁）
             if (Application.Current?.Dispatcher != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     switch (e.NewState)
                     {
@@ -241,7 +241,7 @@ namespace eyesharp.ViewModels
                             PauseResumeButtonText = "休息中";
                             break;
                     }
-                });
+                }), System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 
@@ -250,10 +250,10 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void OnMainCountdownTick(object? sender, TimerTickEventArgs e)
         {
-            // 在UI线程中更新
+            // 在UI线程中更新（使用BeginInvoke避免死锁）
             if (Application.Current?.Dispatcher != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     CountdownText = e.FormattedTime;
 
@@ -264,7 +264,7 @@ namespace eyesharp.ViewModels
                         var progress = (totalSeconds - e.RemainingSeconds) / (double)totalSeconds * 100;
                         CountdownProgress = Math.Min(100, Math.Max(0, progress));
                     }
-                });
+                }), System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 
@@ -332,10 +332,10 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void OnMainCountdownElapsed(object? sender, EventArgs e)
         {
-            // 在UI线程中处理
+            // 在UI线程中处理（使用BeginInvoke避免死锁）
             if (Application.Current?.Dispatcher != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     var behavior = _config.LockScreenBehavior ?? "normal";
 
@@ -349,7 +349,7 @@ namespace eyesharp.ViewModels
 
                     _logService.Info("主倒计时结束，显示休息窗口");
                     ShowRestWindow();
-                });
+                }), System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 
@@ -358,13 +358,13 @@ namespace eyesharp.ViewModels
         /// </summary>
         private void OnRestCountdownTick(object? sender, TimerTickEventArgs e)
         {
-            // 在UI线程中更新休息窗口倒计时
+            // 在UI线程中更新休息窗口倒计时（使用BeginInvoke避免死锁）
             if (Application.Current?.Dispatcher != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     _currentRestWindow?.UpdateCountdown(e.RemainingSeconds);
-                });
+                }), System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 

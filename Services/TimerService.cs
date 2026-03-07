@@ -355,10 +355,13 @@ namespace eyesharp.Services
             lock (_lock)
             {
                 _mainCountdownRemaining = (int)duration.TotalSeconds;
-                State = TimerState.Running;
                 _reminderTriggered.Clear(); // 重置预提醒状态
                 ResetLockScreenFlag(); // 重置锁屏标志
             }
+
+            // 在锁外设置状态，避免死锁
+            // 必须在锁外，因为 State setter 触发的事件会使用 Dispatcher.Invoke 更新UI
+            State = TimerState.Running;
 
             // 在锁外启动定时器，避免死锁
             _timer?.Change(0, 1000);
@@ -376,13 +379,19 @@ namespace eyesharp.Services
         /// </summary>
         public void Pause()
         {
+            bool shouldPause = false;
             lock (_lock)
             {
                 if (_state == TimerState.Running)
                 {
-                    State = TimerState.Paused;
+                    shouldPause = true;
                     // 定时器继续运行，但不会更新倒计时
                 }
+            }
+            // 在锁外设置状态，避免死锁
+            if (shouldPause)
+            {
+                State = TimerState.Paused;
             }
         }
 
@@ -391,12 +400,18 @@ namespace eyesharp.Services
         /// </summary>
         public void Resume()
         {
+            bool shouldResume = false;
             lock (_lock)
             {
                 if (_state == TimerState.Paused)
                 {
-                    State = TimerState.Running;
+                    shouldResume = true;
                 }
+            }
+            // 在锁外设置状态，避免死锁
+            if (shouldResume)
+            {
+                State = TimerState.Running;
             }
         }
 
@@ -410,8 +425,9 @@ namespace eyesharp.Services
                 _timer?.Change(Timeout.Infinite, Timeout.Infinite);
                 _mainCountdownRemaining = 0;
                 _restCountdownRemaining = 0;
-                State = TimerState.Running;
             }
+            // 在锁外设置状态，避免死锁
+            State = TimerState.Running;
         }
 
         /// <summary>
@@ -422,8 +438,10 @@ namespace eyesharp.Services
             lock (_lock)
             {
                 _restCountdownRemaining = (int)duration.TotalSeconds;
-                State = TimerState.Resting;
             }
+
+            // 在锁外设置状态，避免死锁
+            State = TimerState.Resting;
 
             // 在锁外启动定时器，避免死锁
             _timer?.Change(0, 1000);

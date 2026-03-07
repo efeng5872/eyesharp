@@ -32,6 +32,9 @@ namespace eyesharp.Services
         // 记录倒计时期间是否发生过锁屏
         private bool _wasLockedDuringCountdown = false;
 
+        // 记录倒计时期间是否发生过解锁（用于策略3判断）
+        private bool _wasUnlockedDuringCountdown = false;
+
         // 记录是否有待处理的跳过休息（策略3：等解锁后再开始新倒计时）
         private bool _pendingSkipRest = false;
 
@@ -178,7 +181,11 @@ namespace eyesharp.Services
         /// </summary>
         public void NotifyWorkstationUnlocked()
         {
-            // 解锁时不重置标志，保留到倒计时结束
+            // 记录解锁事件，用于策略3判断倒计时结束时是否已经解锁
+            lock (_lock)
+            {
+                _wasUnlockedDuringCountdown = true;
+            }
             _logService?.Debug("[TimerService] 记录到解锁事件");
         }
 
@@ -263,6 +270,7 @@ namespace eyesharp.Services
             lock (_lock)
             {
                 _wasLockedDuringCountdown = false;
+                _wasUnlockedDuringCountdown = false;
                 _pendingSkipRest = false;
                 _logService?.Debug("[TimerService] 重置锁屏标志和待处理跳过标志");
             }
@@ -548,16 +556,32 @@ namespace eyesharp.Services
             switch (behavior)
             {
                 case "skip":
-                    // 策略3：如果倒计时期间锁屏过，设置标志等待解锁后再开始新倒计时
+                    // 策略3：如果倒计时期间锁屏过，根据是否已解锁决定行为
                     if (wasLocked)
                     {
-                        _logService?.Info("[TimerService] 策略3(skip)：倒计时期间曾锁屏，设置标志等待解锁后开始新倒计时");
+                        bool wasUnlockedDuringCountdown;
                         lock (_lock)
                         {
-                            _pendingSkipRest = true;
+                            wasUnlockedDuringCountdown = _wasUnlockedDuringCountdown;
                         }
-                        // 停止定时器，不触发任何事件，等待解锁
-                        _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+
+                        if (wasUnlockedDuringCountdown)
+                        {
+                            // 倒计时期间锁屏过，且已经解锁 → 立即开始新倒计时
+                            _logService?.Info("[TimerService] 策略3(skip)：倒计时期间曾锁屏且已解锁，立即开始新倒计时");
+                            ResetAndStartMainCountdown();
+                        }
+                        else
+                        {
+                            // 倒计时期间锁屏过，且未解锁 → 等待解锁
+                            _logService?.Info("[TimerService] 策略3(skip)：倒计时期间曾锁屏且未解锁，设置标志等待解锁后开始新倒计时");
+                            lock (_lock)
+                            {
+                                _pendingSkipRest = true;
+                            }
+                            // 停止定时器，不触发任何事件，等待解锁
+                            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+                        }
                     }
                     else
                     {

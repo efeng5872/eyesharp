@@ -278,11 +278,19 @@ namespace eyesharp
                 var logService = provider.GetService<ILogService>();
                 return new WindowsLockStateService(logService);
             });
+            // 使用统计服务（需要在TimerService之前注册）
+            services.AddSingleton<eyesharp.Services.UsageStats.IInputMonitorService>(provider =>
+            {
+                var logService = provider.GetService<ILogService>();
+                return new eyesharp.Services.UsageStats.InputMonitorService(logService!);
+            });
+
             services.AddSingleton<ITimerService>(provider =>
             {
                 var logService = provider.GetService<ILogService>();
                 var lockStateService = provider.GetService<ILockStateService>();
-                return new TimerService(logService, lockStateService);
+                var inputMonitorService = provider.GetService<eyesharp.Services.UsageStats.IInputMonitorService>();
+                return new TimerService(logService, lockStateService, inputMonitorService);
             });
             services.AddSingleton<IStatisticsService, StatisticsService>();
             services.AddSingleton<IThemeService, ThemeService>();

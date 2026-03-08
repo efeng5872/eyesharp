@@ -29,6 +29,7 @@ namespace eyesharp.Services
         private LockScreenBehaviorType _lockScreenBehavior = LockScreenBehaviorType.Pause;
 
         private readonly ILockStateService _lockStateService;
+        private readonly eyesharp.Services.UsageStats.IInputMonitorService? _inputMonitorService;
 
         // 策略3：到点且锁屏时，等待解锁后开始新主倒计时
         private bool _isWaitingForUnlock = false;
@@ -186,6 +187,9 @@ namespace eyesharp.Services
                     Pause();
                 }
 
+                // 通知输入监控服务进入锁屏状态
+                _inputMonitorService?.SetLockedState();
+
                 return;
             }
 
@@ -207,6 +211,9 @@ namespace eyesharp.Services
                 {
                     Resume();
                 }
+
+                // 通知输入监控服务从锁屏恢复
+                _inputMonitorService?.SetUnlockedState();
             }
 
             if (behavior == LockScreenBehaviorType.Skip && IsWaitingForUnlock)
@@ -290,13 +297,33 @@ namespace eyesharp.Services
         public event EventHandler<PreReminderEventArgs>? PreReminder;
         public event EventHandler<WaitForUnlockChangedEventArgs>? WaitForUnlockChanged;
 
-        public TimerService(ILogService? logService = null, ILockStateService? lockStateService = null)
+        public TimerService(
+            ILogService? logService = null,
+            ILockStateService? lockStateService = null,
+            eyesharp.Services.UsageStats.IInputMonitorService? inputMonitorService = null)
         {
             _logService = logService;
             _lockStateService = lockStateService ?? new WindowsLockStateService(logService);
+            _inputMonitorService = inputMonitorService;
             _lockStateService.LockStateChanged += OnLockStateChanged;
+
+            // 订阅输入监控状态变化
+            if (_inputMonitorService != null)
+            {
+                _inputMonitorService.ActivityStateChanged += OnInputActivityStateChanged;
+            }
+
             // 初始化定时器，每秒触发一次
             _timer = new System.Threading.Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// 处理输入活动状态变化
+        /// </summary>
+        private void OnInputActivityStateChanged(object? sender, eyesharp.Services.UsageStats.ActivityStateChangedEventArgs e)
+        {
+            _logService?.Debug($"[TimerService] 输入状态变化: {e.OldState} -> {e.NewState}, 持续时间{e.PreviousStateDuration.TotalMinutes:F1}分钟");
+            // TODO: 将状态变化数据传递给使用统计服务
         }
 
         /// <summary>
@@ -621,6 +648,14 @@ namespace eyesharp.Services
             }
 
             _lockStateService.LockStateChanged -= OnLockStateChanged;
+
+            // 取消输入监控事件订阅
+            if (_inputMonitorService != null)
+            {
+                _inputMonitorService.ActivityStateChanged -= OnInputActivityStateChanged;
+                _inputMonitorService.Dispose();
+            }
+
             _lockStateService.Dispose();
         }
     }

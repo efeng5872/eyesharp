@@ -26,6 +26,7 @@ namespace eyesharp.Models
 
         // 状态标记
         public bool IsCompleteHour { get; set; } = true;
+        public DateTime FirstRecordTime { get; set; }
         public DateTime LastUpdateTime { get; set; }
     }
 

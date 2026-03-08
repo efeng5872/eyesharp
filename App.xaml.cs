@@ -108,6 +108,15 @@ namespace eyesharp
                 logCleanupService?.CleanupOldLogs();
                 logService?.Info("旧日志清理完成");
 
+                // 初始化使用统计服务
+                logService?.Info("准备初始化使用统计服务");
+                var usageStatsService = ServiceProvider.GetService<eyesharp.Services.UsageStats.IUsageStatisticsService>();
+                if (usageStatsService != null)
+                {
+                    await usageStatsService.InitializeAsync();
+                    logService?.Info("使用统计服务初始化完成");
+                }
+
                 // 检查是否首次启动（密码未设置）
                 logService?.Info("准备检查密码服务");
                 var passwordService = ServiceProvider.GetService<IPasswordService>();
@@ -291,6 +300,12 @@ namespace eyesharp
                 var lockStateService = provider.GetService<ILockStateService>();
                 var inputMonitorService = provider.GetService<eyesharp.Services.UsageStats.IInputMonitorService>();
                 return new TimerService(logService, lockStateService, inputMonitorService);
+            });
+            // 注册使用统计服务
+            services.AddSingleton<eyesharp.Services.UsageStats.IUsageStatisticsService>(provider =>
+            {
+                var logService = provider.GetService<ILogService>();
+                return new eyesharp.Services.UsageStats.UsageStatisticsService(logService!);
             });
             services.AddSingleton<IStatisticsService, StatisticsService>();
             services.AddSingleton<IThemeService, ThemeService>();

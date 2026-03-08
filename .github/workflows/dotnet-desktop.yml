@@ -47,8 +47,7 @@ jobs:
           dotnet publish `
             eyesharp.csproj `
             --configuration Release `
-            --runtime win-x64 `
-            --self-contained false `
+            --no-self-contained `
             -o ${{ github.workspace }}/publish-fdd
 
       # 调试：确认发布文件（生产环境建议关闭）

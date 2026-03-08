@@ -13,6 +13,8 @@ on:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    permissions:
+      contents: write  # 授予写入 Release 的权限
     defaults:
       run:
         shell: pwsh  # 统一使用PowerShell作为默认shell

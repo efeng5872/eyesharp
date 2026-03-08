@@ -649,7 +649,10 @@ namespace eyesharp.ViewModels
             try
             {
                 // 创建修改密码对话框
-                var dialog = new ChangePasswordDialog(_passwordService, _config.PasswordHash, _logService);
+                var dialog = new ChangePasswordDialog(_passwordService, _config.PasswordHash, _logService)
+                {
+                    Owner = Application.Current.MainWindow
+                };
 
                 // 显示对话框
                 var result = dialog.ShowDialog();
@@ -700,7 +703,10 @@ namespace eyesharp.ViewModels
             try
             {
                 // 显示确认对话框
-                var dialog = new ForgotPasswordDialog();
+                var dialog = new ForgotPasswordDialog
+                {
+                    Owner = Application.Current.MainWindow
+                };
                 var result = dialog.ShowDialog();
 
                 if (result == true && dialog.IsConfirmed)

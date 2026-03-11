@@ -69,7 +69,7 @@ namespace eyesharp.Views
             Activate();
 
             // 如果之前保存过位置，恢复到保存的位置
-            if (_savedLeft.HasValue)
+            if (_savedLeft.HasValue && _savedTop.HasValue)
             {
                 Left = _savedLeft.Value;
                 Top = _savedTop.Value;

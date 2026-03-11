@@ -194,7 +194,7 @@ namespace eyesharp.Services
         /// <summary>
         /// 备份配置文件
         /// </summary>
-        private async Task BackupConfigAsync(string configPath)
+        private Task BackupConfigAsync(string configPath)
         {
             try
             {
@@ -215,12 +215,14 @@ namespace eyesharp.Services
             {
                 _logService.Error(ex, "备份配置文件失败");
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
         /// 备份损坏的配置文件
         /// </summary>
-        private async Task BackupCorruptedConfigAsync(string configPath)
+        private Task BackupCorruptedConfigAsync(string configPath)
         {
             try
             {
@@ -240,6 +242,8 @@ namespace eyesharp.Services
             {
                 _logService.Error(ex, "备份损坏配置文件失败");
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>

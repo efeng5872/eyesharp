@@ -1,7 +1,6 @@
 using Microsoft.Win32;
 using System;
 using System.IO;
-using System.Reflection;
 
 namespace eyesharp.Helpers
 {
@@ -69,15 +68,15 @@ namespace eyesharp.Helpers
         /// </summary>
         private static string GetExecutablePath()
         {
-            // 获取当前程序集的位置
-            var assembly = Assembly.GetEntryAssembly();
-            if (assembly != null)
+            // .NET 8: 单文件发布场景优先使用进程路径
+            var processPath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(processPath))
             {
-                return assembly.Location;
+                return processPath;
             }
 
             // 备选方案
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "eyesharp.exe");
+            return Path.Combine(AppContext.BaseDirectory, "eyesharp.exe");
         }
     }
 }

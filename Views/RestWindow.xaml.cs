@@ -127,8 +127,17 @@ namespace eyesharp.Views
             // 手动设置窗口覆盖整个屏幕
             Left = 0;
             Top = 0;
-            Width = primaryScreen.Bounds.Width;
-            Height = primaryScreen.Bounds.Height;
+            if (primaryScreen != null)
+            {
+                Width = primaryScreen.Bounds.Width;
+                Height = primaryScreen.Bounds.Height;
+            }
+            else
+            {
+                Width = SystemParameters.PrimaryScreenWidth;
+                Height = SystemParameters.PrimaryScreenHeight;
+                _logService.Warn("未获取到主显示器，已使用系统主屏尺寸回退");
+            }
 
             // 确保窗口在最前面
             // 注意：不在这里调用 Show()/Activate()，因为在 ShowRestWindow 中已经调用

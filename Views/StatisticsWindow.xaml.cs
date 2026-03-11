@@ -400,7 +400,7 @@ namespace eyesharp.Views
         /// <summary>
         /// 获取活跃度百分比
         /// </summary>
-        private int GetActivityPercentage(HourlyActivityRecord record)
+        private int GetActivityPercentage(HourlyActivityRecord? record)
         {
             if (record == null) return 0;
 

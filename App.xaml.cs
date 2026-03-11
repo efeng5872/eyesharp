@@ -167,7 +167,7 @@ namespace eyesharp
                 logService?.Info($"密码服务获取成功，密码哈希长度: {_currentConfig.PasswordHash?.Length ?? 0}");
 
                 logService?.Info("检查密码是否已设置");
-                if (passwordService != null && !passwordService.IsPasswordSet(_currentConfig.PasswordHash))
+                if (passwordService != null && !passwordService.IsPasswordSet(_currentConfig.PasswordHash ?? string.Empty))
                 {
                     logService?.Info("密码未设置，准备显示密码设置对话框");
                     // 首次启动，显示密码设置对话框

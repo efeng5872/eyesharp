@@ -120,7 +120,6 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private string _toastMessage = "";
 
-        private System.Windows.Threading.DispatcherTimer? _toastTimer;
         private System.Windows.Threading.DispatcherTimer? _usageStatsSaveTimer;
 
         public MainViewModel(
@@ -737,7 +736,7 @@ namespace eyesharp.ViewModels
         /// 忘记密码命令 - 清空所有配置并退出程序
         /// </summary>
         [RelayCommand]
-        private async System.Threading.Tasks.Task ForgotPasswordAsync()
+        private System.Threading.Tasks.Task ForgotPasswordAsync()
         {
             _logService.Info("用户点击忘记密码");
 
@@ -799,6 +798,8 @@ namespace eyesharp.ViewModels
                     MessageBoxImage.Error
                 );
             }
+
+            return System.Threading.Tasks.Task.CompletedTask;
         }
 
         /// <summary>
@@ -898,9 +899,6 @@ namespace eyesharp.ViewModels
         public void ShowToast(string message, int durationMs = 2000)
         {
             _logService.Info($"显示Toast: {message}");
-
-            // 取消之前的定时器
-            _toastTimer?.Stop();
 
             // 设置消息并显示
             ToastMessage = message;

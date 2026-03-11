@@ -18,32 +18,32 @@ namespace eyesharp.Services.UsageStats
         /// <summary>
         /// 获取今日统计
         /// </summary>
-        DailyUsageStatistics GetTodayStatistics();
+        Task<DailyUsageStatistics> GetTodayStatisticsAsync();
 
         /// <summary>
         /// 获取本周汇总
         /// </summary>
-        DailyUsageStatistics GetWeekStatistics();
+        Task<DailyUsageStatistics> GetWeekStatisticsAsync();
 
         /// <summary>
         /// 获取本月汇总
         /// </summary>
-        DailyUsageStatistics GetMonthStatistics();
+        Task<DailyUsageStatistics> GetMonthStatisticsAsync();
 
         /// <summary>
         /// 获取最近N天的每日统计
         /// </summary>
-        List<DailyUsageStatistics> GetRecentDailyStatistics(int days);
+        Task<List<DailyUsageStatistics>> GetRecentDailyStatisticsAsync(int days);
 
         /// <summary>
         /// 获取指定日期范围的小时级数据
         /// </summary>
-        List<HourlyActivityRecord> GetHourlyData(DateTime startDate, DateTime endDate);
+        Task<List<HourlyActivityRecord>> GetHourlyDataAsync(DateTime startDate, DateTime endDate);
 
         /// <summary>
         /// 获取实时状态
         /// </summary>
-        RealTimeUsageStatus GetRealTimeStatus();
+        Task<RealTimeUsageStatus> GetRealTimeStatusAsync();
 
         /// <summary>
         /// 处理活动状态变化（由InputMonitorService触发）
@@ -64,6 +64,11 @@ namespace eyesharp.Services.UsageStats
         /// 手动保存数据
         /// </summary>
         Task SaveAsync();
+
+        /// <summary>
+        /// 根据小时事实源重算指定日期范围的日汇总缓存
+        /// </summary>
+        Task<int> RebuildDailySummariesAsync(DateTime startDate, DateTime endDate);
 
         /// <summary>
         /// 导出数据到CSV

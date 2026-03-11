@@ -111,10 +111,54 @@ namespace eyesharp
                 // 初始化使用统计服务
                 logService?.Info("准备初始化使用统计服务");
                 var usageStatsService = ServiceProvider.GetService<eyesharp.Services.UsageStats.IUsageStatisticsService>();
+                var inputMonitorService = ServiceProvider.GetService<eyesharp.Services.UsageStats.IInputMonitorService>();
+                var lockStateService = ServiceProvider.GetService<ILockStateService>();
                 if (usageStatsService != null)
                 {
                     await usageStatsService.InitializeAsync();
                     logService?.Info("使用统计服务初始化完成");
+
+                    // 连接输入监控服务和使用统计服务
+                    if (inputMonitorService != null)
+                    {
+                        inputMonitorService.ActivityStateChanged += (s, e) =>
+                        {
+                            usageStatsService.HandleActivityStateChanged(e);
+                        };
+                        inputMonitorService.CounterUpdated += (s, e) =>
+                        {
+                            // 可以在这里处理计数器更新
+                            logService?.Debug($"[App] 输入计数更新: 按键{e.Counter.KeyPressCount}次");
+                        };
+
+                        // 修复：独立启动输入监控服务，不依赖于护眼倒计时
+                        if (!inputMonitorService.IsRunning)
+                        {
+                            inputMonitorService.Start();
+                            logService?.Info("[App] 输入监控服务已独立启动");
+                        }
+
+                        logService?.Info("输入监控服务与使用统计服务已连接");
+                    }
+
+                    // 修复：连接锁屏事件到使用统计服务
+                    if (lockStateService != null)
+                    {
+                        lockStateService.LockStateChanged += (s, e) =>
+                        {
+                            if (e.IsLocked)
+                            {
+                                usageStatsService.HandleLockScreen();
+                                logService?.Debug("[App] 锁屏事件已传递给使用统计服务");
+                            }
+                            else
+                            {
+                                usageStatsService.HandleUnlockScreen();
+                                logService?.Debug("[App] 解锁事件已传递给使用统计服务");
+                            }
+                        };
+                        logService?.Info("锁屏状态服务与使用统计服务已连接");
+                    }
                 }
 
                 // 检查是否首次启动（密码未设置）
@@ -148,7 +192,7 @@ namespace eyesharp
                 var timerService = ServiceProvider.GetService<ITimerService>();
                 var statisticsService = ServiceProvider.GetService<IStatisticsService>();
                 logService?.Info("开始创建 MainViewModel");
-                _mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, statisticsService!, themeService!, _currentConfig);
+                _mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, statisticsService!, usageStatsService!, themeService!, _currentConfig);
                 logService?.Info("MainViewModel 创建成功");
 
                 var mainWindow = new MainWindow(_mainViewModel);
@@ -175,10 +219,34 @@ namespace eyesharp
         /// <summary>
         /// 应用程序退出
         /// </summary>
-        private void Application_Exit(object sender, ExitEventArgs e)
+        private async void Application_Exit(object sender, ExitEventArgs e)
         {
             var logService = _serviceProvider?.GetService<ILogService>();
             logService?.Info("应用程序退出");
+
+            // 保存使用统计数据
+            try
+            {
+                var usageStatsService = _serviceProvider?.GetService<eyesharp.Services.UsageStats.IUsageStatisticsService>();
+                if (usageStatsService != null)
+                {
+                    var saveTask = usageStatsService.SaveAsync();
+                    var completedTask = await Task.WhenAny(saveTask, Task.Delay(TimeSpan.FromSeconds(5)));
+                    if (completedTask == saveTask)
+                    {
+                        await saveTask;
+                        logService?.Info("使用统计数据已保存");
+                    }
+                    else
+                    {
+                        logService?.Warn("使用统计数据保存超时（5秒），程序继续退出");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logService?.Error($"保存使用统计数据失败: {ex.Message}");
+            }
 
             // 释放 MainViewModel（包含托盘图标清理）
             _mainViewModel?.Dispose();
@@ -305,7 +373,8 @@ namespace eyesharp
             services.AddSingleton<eyesharp.Services.UsageStats.IUsageStatisticsService>(provider =>
             {
                 var logService = provider.GetService<ILogService>();
-                return new eyesharp.Services.UsageStats.UsageStatisticsService(logService!);
+                var inputMonitorService = provider.GetService<eyesharp.Services.UsageStats.IInputMonitorService>();
+                return new eyesharp.Services.UsageStats.UsageStatisticsService(logService!, inputMonitorService!);
             });
             services.AddSingleton<IStatisticsService, StatisticsService>();
             services.AddSingleton<IThemeService, ThemeService>();

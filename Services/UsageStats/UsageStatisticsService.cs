@@ -15,17 +15,22 @@ namespace eyesharp.Services.UsageStats
     {
         private readonly ILogService _logService;
         private readonly UsageStatisticsDbContext _dbContext;
+        private readonly IInputMonitorService _inputMonitorService;
         private readonly object _lock = new();
 
-        // 当前小时累计数据
+        // 当前小时累计数据（已落盘事实 + 当前小时内事件增量）
         private HourlyActivityRecord _currentHourRecord = new();
         private DateTime _currentHour;
-        private bool _isInitialized = false;
+        private bool _isInitialized;
 
-        public UsageStatisticsService(ILogService logService)
+        // 输入计数快照（用于增量计算，避免重复累计）
+        private InputEventCounter _lastCounterSnapshot = new();
+
+        public UsageStatisticsService(ILogService logService, IInputMonitorService inputMonitorService, string? dbPath = null)
         {
             _logService = logService ?? throw new ArgumentNullException(nameof(logService));
-            _dbContext = new UsageStatisticsDbContext(logService);
+            _inputMonitorService = inputMonitorService ?? throw new ArgumentNullException(nameof(inputMonitorService));
+            _dbContext = new UsageStatisticsDbContext(logService, dbPath);
             _currentHour = DateTime.Now.Date.AddHours(DateTime.Now.Hour);
         }
 
@@ -41,145 +46,113 @@ namespace eyesharp.Services.UsageStats
 
             await _dbContext.InitializeAsync();
 
-            // 加载当前小时已有数据（如果有）
-            var existingRecord = await _dbContext.GetHourlyRecordsAsync(_currentHour, _currentHour.AddHours(1).AddSeconds(-1));
-            if (existingRecord.Count > 0)
+            var currentHourStart = DateTime.Now.Date.AddHours(DateTime.Now.Hour);
+            var existingRecord = await _dbContext.GetHourlyRecordsAsync(currentHourStart, currentHourStart.AddHours(1).AddSeconds(-1));
+
+            lock (_lock)
             {
-                _currentHourRecord = existingRecord[0];
-                _logService.Debug($"[UsageStatistics] 加载当前小时已有数据: 按键{_currentHourRecord.KeyPressCount}次");
+                _currentHour = currentHourStart;
+                if (existingRecord.Count > 0)
+                {
+                    _currentHourRecord = CloneHourlyRecord(existingRecord[0]);
+                    _logService.Debug($"[UsageStatistics] 加载当前小时已有数据: 按键{_currentHourRecord.KeyPressCount}次");
+                }
+
+                _lastCounterSnapshot = CloneCounter(_inputMonitorService.GetCurrentCounter());
+                _isInitialized = true;
             }
 
-            _isInitialized = true;
             _logService.Info("[UsageStatistics] 使用统计服务初始化完成");
         }
 
         /// <inheritdoc />
-        public DailyUsageStatistics GetTodayStatistics()
+        public async Task<DailyUsageStatistics> GetTodayStatisticsAsync()
+        {
+            EnsureInitialized();
+            var today = DateTime.Now.Date;
+            return await AggregateOneDayAsync(today);
+        }
+
+        /// <inheritdoc />
+        public async Task<DailyUsageStatistics> GetWeekStatisticsAsync()
         {
             EnsureInitialized();
 
             var today = DateTime.Now.Date;
-            var summary = _dbContext.GetDailySummaryAsync(today).Result;
+            var daysSinceMonday = (int)today.DayOfWeek - 1;
+            if (daysSinceMonday < 0) daysSinceMonday = 6;
+            var startOfWeek = today.AddDays(-daysSinceMonday);
 
-            if (summary == null)
-            {
-                // 如果没有日汇总，返回空对象
-                return new DailyUsageStatistics { Date = today };
-            }
-
-            // 添加当前小时的数据
-            lock (_lock)
-            {
-                summary.TotalKeyPressCount += _currentHourRecord.KeyPressCount;
-                summary.TotalMouseMoveDistance += _currentHourRecord.MouseMoveDistance;
-                summary.TotalMouseLeftClickCount += _currentHourRecord.MouseLeftClickCount;
-                summary.TotalMouseRightClickCount += _currentHourRecord.MouseRightClickCount;
-                summary.TotalMouseMiddleClickCount += _currentHourRecord.MouseMiddleClickCount;
-                summary.TotalMouseWheelScrollCount += _currentHourRecord.MouseWheelScrollCount;
-                summary.ActiveSeconds += _currentHourRecord.ActiveSeconds;
-                summary.IdleSeconds += _currentHourRecord.IdleSeconds;
-                summary.LockScreenSeconds += _currentHourRecord.LockScreenSeconds;
-            }
-
-            return summary;
+            return await AggregateRangeToOneStatisticsAsync(startOfWeek, today, startOfWeek);
         }
 
         /// <inheritdoc />
-        public DailyUsageStatistics GetWeekStatistics()
+        public async Task<DailyUsageStatistics> GetMonthStatisticsAsync()
         {
             EnsureInitialized();
 
             var today = DateTime.Now.Date;
-            var startOfWeek = today.AddDays(-(int)today.DayOfWeek);
-
-            var dailyStats = _dbContext.GetRecentDailySummariesAsync(7).Result
-                .Where(d => d.Date >= startOfWeek && d.Date <= today)
-                .ToList();
-
-            // 添加今天的实时数据
-            var todayStats = GetTodayStatistics();
-            dailyStats.Add(todayStats);
-
-            return AggregateDailyStatistics(dailyStats, startOfWeek);
-        }
-
-        /// <inheritdoc />
-        public DailyUsageStatistics GetMonthStatistics()
-        {
-            EnsureInitialized();
-
-            var today = DateTime.Now;
             var startOfMonth = new DateTime(today.Year, today.Month, 1);
 
-            var daysInMonth = (today.Date - startOfMonth).Days + 1;
-            var dailyStats = _dbContext.GetRecentDailySummariesAsync(daysInMonth).Result
-                .Where(d => d.Date >= startOfMonth && d.Date <= today.Date)
-                .ToList();
-
-            // 添加今天的实时数据
-            var todayStats = GetTodayStatistics();
-            dailyStats.Add(todayStats);
-
-            return AggregateDailyStatistics(dailyStats, startOfMonth);
+            return await AggregateRangeToOneStatisticsAsync(startOfMonth, today, startOfMonth);
         }
 
         /// <inheritdoc />
-        public List<DailyUsageStatistics> GetRecentDailyStatistics(int days)
+        public async Task<List<DailyUsageStatistics>> GetRecentDailyStatisticsAsync(int days)
         {
             EnsureInitialized();
+            if (days <= 0)
+            {
+                return new List<DailyUsageStatistics>();
+            }
 
             var endDate = DateTime.Now.Date;
             var startDate = endDate.AddDays(-days + 1);
 
-            var stats = _dbContext.GetRecentDailySummariesAsync(days).Result;
+            var allFacts = await GetHourlyFactsAsync(startDate, endDate);
+            var byDay = allFacts.GroupBy(r => r.Hour.Date)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            // 确保包含今天的数据
-            if (!stats.Any(s => s.Date == endDate))
+            var result = new List<DailyUsageStatistics>(days);
+            for (var day = startDate; day <= endDate; day = day.AddDays(1))
             {
-                stats.Add(GetTodayStatistics());
+                byDay.TryGetValue(day, out var records);
+                result.Add(AggregateDailyStatistics(records ?? new List<HourlyActivityRecord>(), day));
             }
 
-            // 按日期排序
-            return stats.OrderBy(s => s.Date).ToList();
+            return result;
         }
 
         /// <inheritdoc />
-        public List<HourlyActivityRecord> GetHourlyData(DateTime startDate, DateTime endDate)
+        public async Task<List<HourlyActivityRecord>> GetHourlyDataAsync(DateTime startDate, DateTime endDate)
         {
             EnsureInitialized();
 
-            var records = _dbContext.GetHourlyRecordsAsync(startDate, endDate).Result;
-
-            // 如果查询包含当前小时，添加当前数据
-            if (endDate >= _currentHour)
+            if (endDate < startDate)
             {
-                lock (_lock)
-                {
-                    var currentRecord = new HourlyActivityRecord
-                    {
-                        Hour = _currentHour,
-                        ActiveSeconds = _currentHourRecord.ActiveSeconds,
-                        IdleSeconds = _currentHourRecord.IdleSeconds,
-                        LockScreenSeconds = _currentHourRecord.LockScreenSeconds,
-                        LockScreenCount = _currentHourRecord.LockScreenCount,
-                        KeyPressCount = _currentHourRecord.KeyPressCount,
-                        MouseMoveDistance = _currentHourRecord.MouseMoveDistance,
-                        MouseLeftClickCount = _currentHourRecord.MouseLeftClickCount,
-                        MouseRightClickCount = _currentHourRecord.MouseRightClickCount,
-                        MouseMiddleClickCount = _currentHourRecord.MouseMiddleClickCount,
-                        MouseWheelScrollCount = _currentHourRecord.MouseWheelScrollCount
-                    };
+                return new List<HourlyActivityRecord>();
+            }
 
-                    // 如果已有当前小时记录则更新，否则添加
-                    var existingIndex = records.FindIndex(r => r.Hour == _currentHour);
-                    if (existingIndex >= 0)
-                    {
-                        records[existingIndex] = currentRecord;
-                    }
-                    else
-                    {
-                        records.Add(currentRecord);
-                    }
+            var records = await _dbContext.GetHourlyRecordsAsync(startDate, endDate);
+            var now = DateTime.Now;
+
+            DateTime currentHour;
+            lock (_lock)
+            {
+                currentHour = _currentHour;
+            }
+
+            if (startDate <= currentHour && endDate >= currentHour)
+            {
+                var currentRecord = BuildCurrentHourRecordWithRealtime(now);
+                var existingIndex = records.FindIndex(r => r.Hour == currentHour);
+                if (existingIndex >= 0)
+                {
+                    records[existingIndex] = currentRecord;
+                }
+                else
+                {
+                    records.Add(currentRecord);
                 }
             }
 
@@ -187,31 +160,29 @@ namespace eyesharp.Services.UsageStats
         }
 
         /// <inheritdoc />
-        public RealTimeUsageStatus GetRealTimeStatus()
+        public async Task<RealTimeUsageStatus> GetRealTimeStatusAsync()
         {
             EnsureInitialized();
 
-            lock (_lock)
-            {
-                var today = DateTime.Now.Date;
-                var todayStats = GetTodayStatistics();
+            var todayStats = await GetTodayStatisticsAsync();
 
-                return new RealTimeUsageStatus
+            return new RealTimeUsageStatus
+            {
+                CurrentHour = DateTime.Now.Date.AddHours(DateTime.Now.Hour),
+                CurrentState = Enum.Parse<eyesharp.Models.UserActivityState>(_inputMonitorService.CurrentState.ToString()),
+                StateStartTime = _inputMonitorService.StateStartTime,
+                TodayActiveTime = TimeSpan.FromSeconds(todayStats.ActiveSeconds),
+                TodayIdleTime = TimeSpan.FromSeconds(todayStats.IdleSeconds),
+                TodayInputCounter = new InputEventCounter
                 {
-                    CurrentHour = _currentHour,
-                    TodayActiveTime = TimeSpan.FromSeconds(todayStats.ActiveSeconds),
-                    TodayIdleTime = TimeSpan.FromSeconds(todayStats.IdleSeconds),
-                    TodayInputCounter = new InputEventCounter
-                    {
-                        KeyPressCount = todayStats.TotalKeyPressCount,
-                        MouseMoveDistance = todayStats.TotalMouseMoveDistance,
-                        MouseLeftClickCount = todayStats.TotalMouseLeftClickCount,
-                        MouseRightClickCount = todayStats.TotalMouseRightClickCount,
-                        MouseMiddleClickCount = todayStats.TotalMouseMiddleClickCount,
-                        MouseWheelScrollCount = todayStats.TotalMouseWheelScrollCount
-                    }
-                };
-            }
+                    KeyPressCount = todayStats.TotalKeyPressCount,
+                    MouseMoveDistance = todayStats.TotalMouseMoveDistance,
+                    MouseLeftClickCount = todayStats.TotalMouseLeftClickCount,
+                    MouseRightClickCount = todayStats.TotalMouseRightClickCount,
+                    MouseMiddleClickCount = todayStats.TotalMouseMiddleClickCount,
+                    MouseWheelScrollCount = todayStats.TotalMouseWheelScrollCount
+                }
+            };
         }
 
         /// <inheritdoc />
@@ -222,29 +193,29 @@ namespace eyesharp.Services.UsageStats
                 return;
             }
 
+            var now = DateTime.Now;
+            var newHour = now.Date.AddHours(now.Hour);
+            HourlyActivityRecord? recordToPersist = null;
+
             lock (_lock)
             {
-                // 检查是否需要切换小时
-                var now = DateTime.Now;
-                var newHour = now.Date.AddHours(now.Hour);
                 if (newHour > _currentHour)
                 {
-                    // 保存当前小时数据
-                    SaveCurrentHourRecordAsync().Wait();
-
-                    // 切换到新小时
+                    recordToPersist = CloneHourlyRecord(_currentHourRecord);
+                    recordToPersist.IsCompleteHour = true;
                     _currentHour = newHour;
                     _currentHourRecord = new HourlyActivityRecord
                     {
                         Hour = _currentHour,
-                        FirstRecordTime = now
+                        FirstRecordTime = now,
+                        LastUpdateTime = now,
+                        IsCompleteHour = false
                     };
 
                     _logService.Debug($"[UsageStatistics] 切换到新小时: {_currentHour:yyyy-MM-dd HH:mm}");
                 }
 
-                // 根据上一状态累计时长
-                var durationSeconds = (int)args.PreviousStateDuration.TotalSeconds;
+                var durationSeconds = Math.Max(0, (int)args.PreviousStateDuration.TotalSeconds);
                 switch (args.OldState)
                 {
                     case UserActivityState.Active:
@@ -258,18 +229,22 @@ namespace eyesharp.Services.UsageStats
                         break;
                 }
 
-                // 累计输入计数
-                if (args.CounterSnapshot != null)
-                {
-                    _currentHourRecord.KeyPressCount += args.CounterSnapshot.KeyPressCount;
-                    _currentHourRecord.MouseMoveDistance += args.CounterSnapshot.MouseMoveDistance;
-                    _currentHourRecord.MouseLeftClickCount += args.CounterSnapshot.MouseLeftClickCount;
-                    _currentHourRecord.MouseRightClickCount += args.CounterSnapshot.MouseRightClickCount;
-                    _currentHourRecord.MouseMiddleClickCount += args.CounterSnapshot.MouseMiddleClickCount;
-                    _currentHourRecord.MouseWheelScrollCount += args.CounterSnapshot.MouseWheelScrollCount;
-                }
+                var delta = CalculateCounterDelta(args.CounterSnapshot, _lastCounterSnapshot);
+                _currentHourRecord.KeyPressCount += delta.KeyPressCount;
+                _currentHourRecord.MouseMoveDistance += delta.MouseMoveDistance;
+                _currentHourRecord.MouseLeftClickCount += delta.MouseLeftClickCount;
+                _currentHourRecord.MouseRightClickCount += delta.MouseRightClickCount;
+                _currentHourRecord.MouseMiddleClickCount += delta.MouseMiddleClickCount;
+                _currentHourRecord.MouseWheelScrollCount += delta.MouseWheelScrollCount;
 
+                _lastCounterSnapshot = CloneCounter(args.CounterSnapshot);
                 _currentHourRecord.LastUpdateTime = now;
+                _currentHourRecord.IsCompleteHour = false;
+            }
+
+            if (recordToPersist != null)
+            {
+                _ = PersistHourlyRecordSafeAsync(recordToPersist);
             }
         }
 
@@ -284,14 +259,16 @@ namespace eyesharp.Services.UsageStats
             lock (_lock)
             {
                 _currentHourRecord.LockScreenCount++;
-                _logService.Debug("[UsageStatistics] 记录锁屏事件");
+                _currentHourRecord.LastUpdateTime = DateTime.Now;
+                _currentHourRecord.IsCompleteHour = false;
             }
+
+            _logService.Debug("[UsageStatistics] 记录锁屏事件");
         }
 
         /// <inheritdoc />
         public void HandleUnlockScreen()
         {
-            // 解锁时的处理已在状态变化中处理
             _logService.Debug("[UsageStatistics] 记录解锁事件");
         }
 
@@ -299,16 +276,50 @@ namespace eyesharp.Services.UsageStats
         public async Task SaveAsync()
         {
             EnsureInitialized();
-
             _logService.Debug("[UsageStatistics] 保存统计数据...");
 
-            // 保存当前小时记录
             await SaveCurrentHourRecordAsync();
-
-            // 更新日汇总
             await UpdateDailySummaryAsync();
 
             _logService.Debug("[UsageStatistics] 统计数据保存完成");
+        }
+
+        /// <inheritdoc />
+        public async Task<int> RebuildDailySummariesAsync(DateTime startDate, DateTime endDate)
+        {
+            EnsureInitialized();
+
+            var rangeStart = startDate.Date;
+            var rangeEnd = endDate.Date;
+            if (rangeEnd < rangeStart)
+            {
+                return 0;
+            }
+
+            _logService.Info($"[UsageStatistics] 开始重算日汇总: {rangeStart:yyyy-MM-dd} ~ {rangeEnd:yyyy-MM-dd}");
+
+            var allFacts = await GetHourlyFactsAsync(rangeStart, rangeEnd);
+            var byDay = allFacts.GroupBy(r => r.Hour.Date)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var rebuiltCount = 0;
+            var now = DateTime.Now;
+
+            for (var day = rangeStart; day <= rangeEnd; day = day.AddDays(1))
+            {
+                byDay.TryGetValue(day, out var dayRecords);
+                dayRecords ??= new List<HourlyActivityRecord>();
+
+                var summary = AggregateDailyStatistics(dayRecords, day);
+                summary.FirstRecordTime = dayRecords.Count > 0 ? dayRecords.Min(r => r.Hour) : day;
+                summary.LastRecordTime = day == now.Date ? now : day.AddDays(1).AddSeconds(-1);
+
+                await _dbContext.SaveDailySummaryAsync(summary);
+                rebuiltCount++;
+            }
+
+            _logService.Info($"[UsageStatistics] 日汇总重算完成: {rangeStart:yyyy-MM-dd} ~ {rangeEnd:yyyy-MM-dd}, 共{rebuiltCount}天");
+            return rebuiltCount;
         }
 
         /// <inheritdoc />
@@ -316,15 +327,13 @@ namespace eyesharp.Services.UsageStats
         {
             EnsureInitialized();
 
-            var records = await _dbContext.GetHourlyRecordsAsync(startDate, endDate);
+            var records = await GetHourlyDataAsync(startDate, endDate);
             var sb = new StringBuilder();
 
-            // 写入CSV头部
             sb.AppendLine("Hour,ActiveSeconds,IdleSeconds,LockScreenSeconds,LockScreenCount," +
                 "KeyPressCount,MouseMoveDistance,MouseLeftClickCount,MouseRightClickCount," +
                 "MouseMiddleClickCount,MouseWheelScrollCount");
 
-            // 写入数据
             foreach (var record in records)
             {
                 sb.AppendLine($"{record.Hour:yyyy-MM-dd HH:mm:ss}," +
@@ -333,7 +342,6 @@ namespace eyesharp.Services.UsageStats
                     $"{record.MouseRightClickCount},{record.MouseMiddleClickCount},{record.MouseWheelScrollCount}");
             }
 
-            // 保存到文件
             var fileName = $"usage_statistics_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.csv";
             var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
             await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
@@ -342,67 +350,136 @@ namespace eyesharp.Services.UsageStats
             return filePath;
         }
 
-        /// <summary>
-        /// 保存当前小时记录到数据库
-        /// </summary>
-        private async Task SaveCurrentHourRecordAsync()
+        private async Task<DailyUsageStatistics> AggregateOneDayAsync(DateTime day)
         {
-            lock (_lock)
+            var facts = await GetHourlyFactsAsync(day, day);
+            return AggregateDailyStatistics(facts.Where(r => r.Hour.Date == day).ToList(), day);
+        }
+
+        private async Task<DailyUsageStatistics> AggregateRangeToOneStatisticsAsync(DateTime startDate, DateTime endDate, DateTime outputDate)
+        {
+            var facts = await GetHourlyFactsAsync(startDate, endDate);
+            return AggregateDailyStatistics(facts, outputDate);
+        }
+
+        private async Task<List<HourlyActivityRecord>> GetHourlyFactsAsync(DateTime startDate, DateTime endDate)
+        {
+            var now = DateTime.Now;
+            var queryStart = startDate.Date;
+            var queryEnd = endDate.Date.AddDays(1).AddSeconds(-1);
+
+            var records = await _dbContext.GetHourlyRecordsAsync(queryStart, queryEnd);
+
+            if (endDate.Date >= now.Date)
             {
-                if (_currentHourRecord.LastUpdateTime == default)
+                DateTime currentHour;
+                lock (_lock)
                 {
-                    return; // 没有数据需要保存
+                    currentHour = _currentHour;
                 }
 
-                _currentHourRecord.IsCompleteHour = DateTime.Now >= _currentHour.AddHours(1);
+                records.RemoveAll(r => r.Hour == currentHour);
+                records.Add(BuildCurrentHourRecordWithRealtime(now));
             }
 
-            await _dbContext.SaveHourlyRecordAsync(_currentHourRecord);
+            return records
+                .Where(r => r.Hour.Date >= startDate.Date && r.Hour.Date <= endDate.Date)
+                .GroupBy(r => r.Hour)
+                .Select(g => g.OrderByDescending(x => x.LastUpdateTime).First())
+                .OrderBy(r => r.Hour)
+                .ToList();
+        }
+
+        private HourlyActivityRecord BuildCurrentHourRecordWithRealtime(DateTime now)
+        {
+            HourlyActivityRecord baseRecord;
+            DateTime hourStart;
+
+            lock (_lock)
+            {
+                hourStart = _currentHour;
+                baseRecord = CloneHourlyRecord(_currentHourRecord);
+            }
+
+            var realtimeRecord = CloneHourlyRecord(baseRecord);
+            realtimeRecord.Hour = hourStart;
+
+            var state = _inputMonitorService.CurrentState;
+            var stateStart = _inputMonitorService.StateStartTime;
+            var overlapStart = stateStart > hourStart ? stateStart : hourStart;
+            var additionalSeconds = Math.Max(0, (int)(now - overlapStart).TotalSeconds);
+
+            if (additionalSeconds > 0)
+            {
+                switch (state)
+                {
+                    case UserActivityState.Active:
+                        realtimeRecord.ActiveSeconds += additionalSeconds;
+                        break;
+                    case UserActivityState.Idle:
+                        realtimeRecord.IdleSeconds += additionalSeconds;
+                        break;
+                    case UserActivityState.Locked:
+                        realtimeRecord.LockScreenSeconds += additionalSeconds;
+                        break;
+                }
+            }
+
+            realtimeRecord.LastUpdateTime = now;
+            realtimeRecord.IsCompleteHour = false;
+
+            _logService.Debug($"[UsageStatistics] 当前小时补算: 小时{hourStart:yyyy-MM-dd HH}:00, 状态={state}, 补算{additionalSeconds}秒");
+
+            return realtimeRecord;
+        }
+
+        private async Task SaveCurrentHourRecordAsync()
+        {
+            HourlyActivityRecord? recordToSave = null;
+
+            lock (_lock)
+            {
+                if (_currentHourRecord.LastUpdateTime == default &&
+                    _currentHourRecord.KeyPressCount == 0 &&
+                    _currentHourRecord.MouseMoveDistance == 0 &&
+                    _currentHourRecord.MouseLeftClickCount == 0 &&
+                    _currentHourRecord.MouseRightClickCount == 0 &&
+                    _currentHourRecord.MouseMiddleClickCount == 0 &&
+                    _currentHourRecord.MouseWheelScrollCount == 0 &&
+                    _currentHourRecord.ActiveSeconds == 0 &&
+                    _currentHourRecord.IdleSeconds == 0 &&
+                    _currentHourRecord.LockScreenSeconds == 0 &&
+                    _currentHourRecord.LockScreenCount == 0)
+                {
+                    return;
+                }
+
+                recordToSave = CloneHourlyRecord(_currentHourRecord);
+                recordToSave.Hour = _currentHour;
+                recordToSave.IsCompleteHour = DateTime.Now >= _currentHour.AddHours(1);
+                recordToSave.LastUpdateTime = DateTime.Now;
+            }
+
+            await _dbContext.SaveHourlyRecordAsync(recordToSave);
             _logService.Debug($"[UsageStatistics] 保存小时记录: {_currentHour:yyyy-MM-dd HH:mm}");
         }
 
-        /// <summary>
-        /// 更新日汇总
-        /// </summary>
         private async Task UpdateDailySummaryAsync()
         {
             var today = DateTime.Now.Date;
-            var hourlyRecords = await _dbContext.GetHourlyRecordsAsync(today, today.AddDays(1).AddSeconds(-1));
+            var todayFacts = await GetHourlyFactsAsync(today, today);
 
-            // 添加当前小时数据
-            lock (_lock)
-            {
-                hourlyRecords.Add(_currentHourRecord);
-            }
-
-            var summary = new DailyUsageStatistics
-            {
-                Date = today,
-                TotalBootSeconds = hourlyRecords.Sum(r => r.ActiveSeconds + r.IdleSeconds + r.LockScreenSeconds),
-                ActiveSeconds = hourlyRecords.Sum(r => r.ActiveSeconds),
-                IdleSeconds = hourlyRecords.Sum(r => r.IdleSeconds),
-                LockScreenSeconds = hourlyRecords.Sum(r => r.LockScreenSeconds),
-                LockScreenCount = hourlyRecords.Sum(r => r.LockScreenCount),
-                TotalKeyPressCount = hourlyRecords.Sum(r => r.KeyPressCount),
-                TotalMouseMoveDistance = hourlyRecords.Sum(r => r.MouseMoveDistance),
-                TotalMouseLeftClickCount = hourlyRecords.Sum(r => r.MouseLeftClickCount),
-                TotalMouseRightClickCount = hourlyRecords.Sum(r => r.MouseRightClickCount),
-                TotalMouseMiddleClickCount = hourlyRecords.Sum(r => r.MouseMiddleClickCount),
-                TotalMouseWheelScrollCount = hourlyRecords.Sum(r => r.MouseWheelScrollCount),
-                FirstRecordTime = hourlyRecords.Min(r => r.Hour),
-                LastRecordTime = DateTime.Now
-            };
+            var summary = AggregateDailyStatistics(todayFacts, today);
+            summary.FirstRecordTime = todayFacts.Any() ? todayFacts.Min(r => r.Hour) : today;
+            summary.LastRecordTime = DateTime.Now;
 
             await _dbContext.SaveDailySummaryAsync(summary);
             _logService.Debug($"[UsageStatistics] 更新日汇总: {today:yyyy-MM-dd}");
         }
 
-        /// <summary>
-        /// 聚合多日统计数据
-        /// </summary>
-        private static DailyUsageStatistics AggregateDailyStatistics(List<DailyUsageStatistics> dailyStats, DateTime date)
+        private static DailyUsageStatistics AggregateDailyStatistics(List<HourlyActivityRecord> records, DateTime date)
         {
-            if (dailyStats.Count == 0)
+            if (records.Count == 0)
             {
                 return new DailyUsageStatistics { Date = date };
             }
@@ -410,23 +487,82 @@ namespace eyesharp.Services.UsageStats
             return new DailyUsageStatistics
             {
                 Date = date,
-                TotalBootSeconds = dailyStats.Sum(s => s.TotalBootSeconds),
-                ActiveSeconds = dailyStats.Sum(s => s.ActiveSeconds),
-                IdleSeconds = dailyStats.Sum(s => s.IdleSeconds),
-                LockScreenSeconds = dailyStats.Sum(s => s.LockScreenSeconds),
-                LockScreenCount = dailyStats.Sum(s => s.LockScreenCount),
-                TotalKeyPressCount = dailyStats.Sum(s => s.TotalKeyPressCount),
-                TotalMouseMoveDistance = dailyStats.Sum(s => s.TotalMouseMoveDistance),
-                TotalMouseLeftClickCount = dailyStats.Sum(s => s.TotalMouseLeftClickCount),
-                TotalMouseRightClickCount = dailyStats.Sum(s => s.TotalMouseRightClickCount),
-                TotalMouseMiddleClickCount = dailyStats.Sum(s => s.TotalMouseMiddleClickCount),
-                TotalMouseWheelScrollCount = dailyStats.Sum(s => s.TotalMouseWheelScrollCount)
+                TotalBootSeconds = records.Sum(r => r.ActiveSeconds + r.IdleSeconds + r.LockScreenSeconds),
+                ActiveSeconds = records.Sum(r => r.ActiveSeconds),
+                IdleSeconds = records.Sum(r => r.IdleSeconds),
+                LockScreenSeconds = records.Sum(r => r.LockScreenSeconds),
+                LockScreenCount = records.Sum(r => r.LockScreenCount),
+                TotalKeyPressCount = records.Sum(r => r.KeyPressCount),
+                TotalMouseMoveDistance = records.Sum(r => r.MouseMoveDistance),
+                TotalMouseLeftClickCount = records.Sum(r => r.MouseLeftClickCount),
+                TotalMouseRightClickCount = records.Sum(r => r.MouseRightClickCount),
+                TotalMouseMiddleClickCount = records.Sum(r => r.MouseMiddleClickCount),
+                TotalMouseWheelScrollCount = records.Sum(r => r.MouseWheelScrollCount)
             };
         }
 
-        /// <summary>
-        /// 确保服务已初始化
-        /// </summary>
+        private static HourlyActivityRecord CloneHourlyRecord(HourlyActivityRecord source)
+        {
+            return new HourlyActivityRecord
+            {
+                Hour = source.Hour,
+                ActiveSeconds = source.ActiveSeconds,
+                IdleSeconds = source.IdleSeconds,
+                LockScreenSeconds = source.LockScreenSeconds,
+                LockScreenCount = source.LockScreenCount,
+                KeyPressCount = source.KeyPressCount,
+                MouseMoveDistance = source.MouseMoveDistance,
+                MouseLeftClickCount = source.MouseLeftClickCount,
+                MouseRightClickCount = source.MouseRightClickCount,
+                MouseMiddleClickCount = source.MouseMiddleClickCount,
+                MouseWheelScrollCount = source.MouseWheelScrollCount,
+                IsCompleteHour = source.IsCompleteHour,
+                FirstRecordTime = source.FirstRecordTime,
+                LastUpdateTime = source.LastUpdateTime
+            };
+        }
+
+        private static InputEventCounter CloneCounter(InputEventCounter source)
+        {
+            return new InputEventCounter
+            {
+                KeyPressCount = source.KeyPressCount,
+                MouseMoveDistance = source.MouseMoveDistance,
+                MouseLeftClickCount = source.MouseLeftClickCount,
+                MouseRightClickCount = source.MouseRightClickCount,
+                MouseMiddleClickCount = source.MouseMiddleClickCount,
+                MouseWheelScrollCount = source.MouseWheelScrollCount,
+                LastMousePosition = source.LastMousePosition,
+                HasLastPosition = source.HasLastPosition
+            };
+        }
+
+        private static InputEventCounter CalculateCounterDelta(InputEventCounter current, InputEventCounter previous)
+        {
+            return new InputEventCounter
+            {
+                KeyPressCount = Math.Max(0, current.KeyPressCount - previous.KeyPressCount),
+                MouseMoveDistance = Math.Max(0, current.MouseMoveDistance - previous.MouseMoveDistance),
+                MouseLeftClickCount = Math.Max(0, current.MouseLeftClickCount - previous.MouseLeftClickCount),
+                MouseRightClickCount = Math.Max(0, current.MouseRightClickCount - previous.MouseRightClickCount),
+                MouseMiddleClickCount = Math.Max(0, current.MouseMiddleClickCount - previous.MouseMiddleClickCount),
+                MouseWheelScrollCount = Math.Max(0, current.MouseWheelScrollCount - previous.MouseWheelScrollCount)
+            };
+        }
+
+        private async Task PersistHourlyRecordSafeAsync(HourlyActivityRecord record)
+        {
+            try
+            {
+                await _dbContext.SaveHourlyRecordAsync(record);
+                _logService.Debug($"[UsageStatistics] 异步保存跨小时记录: {record.Hour:yyyy-MM-dd HH:mm}");
+            }
+            catch (Exception ex)
+            {
+                _logService.Error(ex, "[UsageStatistics] 异步保存跨小时记录失败");
+            }
+        }
+
         private void EnsureInitialized()
         {
             if (!_isInitialized)
@@ -437,13 +573,19 @@ namespace eyesharp.Services.UsageStats
 
         public void Dispose()
         {
-            // 保存当前数据
             if (_isInitialized)
             {
-                SaveAsync().Wait();
+                try
+                {
+                    SaveAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _logService.Error(ex, "[UsageStatistics] Dispose 时保存数据失败");
+                }
             }
 
-            _dbContext?.Dispose();
+            _dbContext.Dispose();
         }
     }
 }

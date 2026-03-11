@@ -323,7 +323,6 @@ namespace eyesharp.Services
         private void OnInputActivityStateChanged(object? sender, eyesharp.Services.UsageStats.ActivityStateChangedEventArgs e)
         {
             _logService?.Debug($"[TimerService] 输入状态变化: {e.OldState} -> {e.NewState}, 持续时间{e.PreviousStateDuration.TotalMinutes:F1}分钟");
-            // TODO: 将状态变化数据传递给使用统计服务
         }
 
         /// <summary>
@@ -346,6 +345,13 @@ namespace eyesharp.Services
 
             // 在锁外启动定时器，避免死锁
             _timer?.Change(0, 1000);
+
+            // 启动输入监控服务
+            if (_inputMonitorService != null && !_inputMonitorService.IsRunning)
+            {
+                _inputMonitorService.Start();
+                _logService?.Info("[TimerService] 输入监控服务已启动");
+            }
 
             // 使用 Task.Run 延迟触发 Tick，避免死锁
             Task.Run(() =>

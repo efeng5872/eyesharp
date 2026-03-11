@@ -17,11 +17,13 @@ namespace eyesharp.Services.UsageStats
         private readonly string _encryptionKey;
         private SqliteConnection? _connection;
 
-        public UsageStatisticsDbContext(ILogService logService)
+        public UsageStatisticsDbContext(ILogService logService, string? dbPath = null)
         {
             _logService = logService ?? throw new ArgumentNullException(nameof(logService));
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            _dbPath = Path.Combine(baseDir, "usage_statistics.db");
+            _dbPath = string.IsNullOrWhiteSpace(dbPath)
+                ? Path.Combine(baseDir, "usage_statistics.db")
+                : dbPath;
             _encryptionKey = DatabaseEncryptionKeyProvider.GetEncryptionKey();
         }
 
@@ -145,30 +147,64 @@ namespace eyesharp.Services.UsageStats
         public async Task SaveHourlyRecordAsync(HourlyActivityRecord record)
         {
             using var cmd = _connection!.CreateCommand();
-            cmd.CommandText = @"
-                INSERT INTO HourlyRecords (
-                    Hour, ActiveSeconds, IdleSeconds, LockScreenSeconds, LockScreenCount,
-                    KeyPressCount, MouseMoveDistance, MouseLeftClickCount, MouseRightClickCount,
-                    MouseMiddleClickCount, MouseWheelScrollCount, IsCompleteHour, UpdatedAt
-                ) VALUES (
-                    @Hour, @ActiveSeconds, @IdleSeconds, @LockScreenSeconds, @LockScreenCount,
-                    @KeyPressCount, @MouseMoveDistance, @MouseLeftClickCount, @MouseRightClickCount,
-                    @MouseMiddleClickCount, @MouseWheelScrollCount, @IsCompleteHour, @UpdatedAt
-                )
-                ON CONFLICT(Hour) DO UPDATE SET
-                    ActiveSeconds = ActiveSeconds + excluded.ActiveSeconds,
-                    IdleSeconds = IdleSeconds + excluded.IdleSeconds,
-                    LockScreenSeconds = LockScreenSeconds + excluded.LockScreenSeconds,
-                    LockScreenCount = LockScreenCount + excluded.LockScreenCount,
-                    KeyPressCount = KeyPressCount + excluded.KeyPressCount,
-                    MouseMoveDistance = MouseMoveDistance + excluded.MouseMoveDistance,
-                    MouseLeftClickCount = MouseLeftClickCount + excluded.MouseLeftClickCount,
-                    MouseRightClickCount = MouseRightClickCount + excluded.MouseRightClickCount,
-                    MouseMiddleClickCount = MouseMiddleClickCount + excluded.MouseMiddleClickCount,
-                    MouseWheelScrollCount = MouseWheelScrollCount + excluded.MouseWheelScrollCount,
-                    IsCompleteHour = excluded.IsCompleteHour,
-                    UpdatedAt = excluded.UpdatedAt;
-            ";
+
+            // 修复：根据是否完整小时选择更新策略
+            if (record.IsCompleteHour)
+            {
+                // 已完成小时：累加模式（可能有多个保存事件）
+                cmd.CommandText = @"
+                    INSERT INTO HourlyRecords (
+                        Hour, ActiveSeconds, IdleSeconds, LockScreenSeconds, LockScreenCount,
+                        KeyPressCount, MouseMoveDistance, MouseLeftClickCount, MouseRightClickCount,
+                        MouseMiddleClickCount, MouseWheelScrollCount, IsCompleteHour, UpdatedAt
+                    ) VALUES (
+                        @Hour, @ActiveSeconds, @IdleSeconds, @LockScreenSeconds, @LockScreenCount,
+                        @KeyPressCount, @MouseMoveDistance, @MouseLeftClickCount, @MouseRightClickCount,
+                        @MouseMiddleClickCount, @MouseWheelScrollCount, @IsCompleteHour, @UpdatedAt
+                    )
+                    ON CONFLICT(Hour) DO UPDATE SET
+                        ActiveSeconds = ActiveSeconds + excluded.ActiveSeconds,
+                        IdleSeconds = IdleSeconds + excluded.IdleSeconds,
+                        LockScreenSeconds = LockScreenSeconds + excluded.LockScreenSeconds,
+                        LockScreenCount = LockScreenCount + excluded.LockScreenCount,
+                        KeyPressCount = KeyPressCount + excluded.KeyPressCount,
+                        MouseMoveDistance = MouseMoveDistance + excluded.MouseMoveDistance,
+                        MouseLeftClickCount = MouseLeftClickCount + excluded.MouseLeftClickCount,
+                        MouseRightClickCount = MouseRightClickCount + excluded.MouseRightClickCount,
+                        MouseMiddleClickCount = MouseMiddleClickCount + excluded.MouseMiddleClickCount,
+                        MouseWheelScrollCount = MouseWheelScrollCount + excluded.MouseWheelScrollCount,
+                        IsCompleteHour = excluded.IsCompleteHour,
+                        UpdatedAt = excluded.UpdatedAt;
+                ";
+            }
+            else
+            {
+                // 当前未完成小时：替换模式（内存中的数据是最新的）
+                cmd.CommandText = @"
+                    INSERT INTO HourlyRecords (
+                        Hour, ActiveSeconds, IdleSeconds, LockScreenSeconds, LockScreenCount,
+                        KeyPressCount, MouseMoveDistance, MouseLeftClickCount, MouseRightClickCount,
+                        MouseMiddleClickCount, MouseWheelScrollCount, IsCompleteHour, UpdatedAt
+                    ) VALUES (
+                        @Hour, @ActiveSeconds, @IdleSeconds, @LockScreenSeconds, @LockScreenCount,
+                        @KeyPressCount, @MouseMoveDistance, @MouseLeftClickCount, @MouseRightClickCount,
+                        @MouseMiddleClickCount, @MouseWheelScrollCount, @IsCompleteHour, @UpdatedAt
+                    )
+                    ON CONFLICT(Hour) DO UPDATE SET
+                        ActiveSeconds = excluded.ActiveSeconds,
+                        IdleSeconds = excluded.IdleSeconds,
+                        LockScreenSeconds = excluded.LockScreenSeconds,
+                        LockScreenCount = excluded.LockScreenCount,
+                        KeyPressCount = excluded.KeyPressCount,
+                        MouseMoveDistance = excluded.MouseMoveDistance,
+                        MouseLeftClickCount = excluded.MouseLeftClickCount,
+                        MouseRightClickCount = excluded.MouseRightClickCount,
+                        MouseMiddleClickCount = excluded.MouseMiddleClickCount,
+                        MouseWheelScrollCount = excluded.MouseWheelScrollCount,
+                        IsCompleteHour = excluded.IsCompleteHour,
+                        UpdatedAt = excluded.UpdatedAt;
+                ";
+            }
 
             cmd.Parameters.AddWithValue("@Hour", record.Hour.ToString("yyyy-MM-dd HH:mm:ss"));
             cmd.Parameters.AddWithValue("@ActiveSeconds", record.ActiveSeconds);

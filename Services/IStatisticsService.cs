@@ -46,6 +46,16 @@ namespace eyesharp.Services
         List<RestRecord> GetRecentRecords(int count = 100);
 
         /// <summary>
+        /// 获取指定日期范围内的记录（按时间倒序）
+        /// </summary>
+        List<RestRecord> GetRecordsByDateRange(DateTime startDate, DateTime endDate);
+
+        /// <summary>
+        /// 获取指定日期范围内的记录（分页，按时间倒序）
+        /// </summary>
+        List<RestRecord> GetRecordsByDateRange(DateTime startDate, DateTime endDate, int page, int pageSize, out int totalCount);
+
+        /// <summary>
         /// 异步保存统计数据
         /// </summary>
         Task SaveAsync();

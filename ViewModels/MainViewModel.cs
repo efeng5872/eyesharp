@@ -22,6 +22,7 @@ namespace eyesharp.ViewModels
         private readonly ITimerService _timerService;
         private readonly IPasswordService _passwordService;
         private readonly IStatisticsService _statisticsService;
+        private readonly eyesharp.Services.UsageStats.IUsageStatisticsService _usageStatsService;
         private readonly IThemeService _themeService;
         private AppConfig _config;
         private RestWindow? _currentRestWindow;
@@ -120,14 +121,24 @@ namespace eyesharp.ViewModels
         private string _toastMessage = "";
 
         private System.Windows.Threading.DispatcherTimer? _toastTimer;
+        private System.Windows.Threading.DispatcherTimer? _usageStatsSaveTimer;
 
-        public MainViewModel(IConfigService configService, ILogService logService, ITimerService timerService, IPasswordService passwordService, IStatisticsService statisticsService, IThemeService themeService, AppConfig config)
+        public MainViewModel(
+            IConfigService configService,
+            ILogService logService,
+            ITimerService timerService,
+            IPasswordService passwordService,
+            IStatisticsService statisticsService,
+            eyesharp.Services.UsageStats.IUsageStatisticsService usageStatsService,
+            IThemeService themeService,
+            AppConfig config)
         {
             _configService = configService;
             _logService = logService;
             _timerService = timerService;
             _passwordService = passwordService;
             _statisticsService = statisticsService;
+            _usageStatsService = usageStatsService;
             _themeService = themeService;
             _config = config;
 
@@ -192,6 +203,36 @@ namespace eyesharp.ViewModels
 
             // 加载统计数据
             _ = _statisticsService.LoadAsync();
+
+            // 初始化使用统计数据定时保存（每5分钟）
+            InitializeUsageStatsAutoSave();
+        }
+
+        /// <summary>
+        /// 初始化使用统计数据自动保存
+        /// </summary>
+        private void InitializeUsageStatsAutoSave()
+        {
+            if (_usageStatsService == null) return;
+
+            _usageStatsSaveTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(5)
+            };
+            _usageStatsSaveTimer.Tick += async (s, e) =>
+            {
+                try
+                {
+                    await _usageStatsService.SaveAsync();
+                    _logService.Debug("使用统计数据自动保存完成");
+                }
+                catch (Exception ex)
+                {
+                    _logService.Error($"使用统计数据自动保存失败: {ex.Message}");
+                }
+            };
+            _usageStatsSaveTimer.Start();
+            _logService.Info("使用统计数据自动保存已启动（间隔5分钟）");
         }
 
         /// <summary>
@@ -830,7 +871,11 @@ namespace eyesharp.ViewModels
                 _ = _statisticsService.SaveAsync();
 
                 // 创建并显示统计窗口
-                var statisticsWindow = new StatisticsWindow(_statisticsService, _logService, _themeService);
+                var statisticsWindow = new StatisticsWindow(
+                    _statisticsService,
+                    _usageStatsService,
+                    _logService,
+                    _themeService);
                 statisticsWindow.ShowDialog();
             }
             catch (Exception ex)
@@ -1144,6 +1189,10 @@ namespace eyesharp.ViewModels
             _timerService.PreReminder -= OnPreReminder;
             _timerService.SkipRest -= OnSkipRest;
             _timerService.WaitForUnlockChanged -= OnWaitForUnlockChanged;
+
+            // 停止使用统计数据自动保存定时器
+            _usageStatsSaveTimer?.Stop();
+            _usageStatsSaveTimer = null;
 
             // 释放托盘图标资源
             _trayIcon?.Dispose();

@@ -109,14 +109,17 @@ namespace eyesharp.Services
         }
 
         /// <summary>
-        /// 获取本周统计
+        /// 获取本周统计（周一开始）
         /// </summary>
         public DailyStatistics GetWeekStatistics()
         {
             lock (_lock)
             {
                 var today = DateTime.Now.Date;
-                var startOfWeek = today.AddDays(-(int)today.DayOfWeek);
+                // 中国习惯：周一为一周开始 (DayOfWeek: Sunday=0, Monday=1, ...)
+                var daysSinceMonday = (int)today.DayOfWeek - 1;
+                if (daysSinceMonday < 0) daysSinceMonday = 6; // 周日时，回退6天到上周一
+                var startOfWeek = today.AddDays(-daysSinceMonday);
 
                 var weekStats = _data.DailyStats
                     .Where(d => d.Date >= startOfWeek && d.Date <= today)
@@ -190,6 +193,41 @@ namespace eyesharp.Services
                 return _data.Records
                     .OrderByDescending(r => r.StartTime)
                     .Take(count)
+                    .ToList();
+            }
+        }
+
+        /// <summary>
+        /// 获取指定日期范围内的记录（按时间倒序）
+        /// </summary>
+        public List<RestRecord> GetRecordsByDateRange(DateTime startDate, DateTime endDate)
+        {
+            lock (_lock)
+            {
+                return _data.Records
+                    .Where(r => r.StartTime.Date >= startDate.Date && r.StartTime.Date <= endDate.Date)
+                    .OrderByDescending(r => r.StartTime)
+                    .ToList();
+            }
+        }
+
+        /// <summary>
+        /// 获取指定日期范围内的记录（分页，按时间倒序）
+        /// </summary>
+        public List<RestRecord> GetRecordsByDateRange(DateTime startDate, DateTime endDate, int page, int pageSize, out int totalCount)
+        {
+            lock (_lock)
+            {
+                var filteredRecords = _data.Records
+                    .Where(r => r.StartTime.Date >= startDate.Date && r.StartTime.Date <= endDate.Date)
+                    .OrderByDescending(r => r.StartTime)
+                    .ToList();
+
+                totalCount = filteredRecords.Count;
+
+                return filteredRecords
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .ToList();
             }
         }

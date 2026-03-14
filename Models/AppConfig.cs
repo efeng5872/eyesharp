@@ -66,6 +66,46 @@ namespace eyesharp.Models
         /// 锁屏时的处理方式："pause"=暂停倒计时, "skip"=跳过本次休息, "normal"=正常显示
         /// </summary>
         public string LockScreenBehavior { get; set; } = LockScreenBehaviorConverter.PauseValue;
+
+        /// <summary>
+        /// 鼠标移动距离换算：是否优先使用主屏自动DPI
+        /// </summary>
+        public bool MouseDistanceUseAutoDpi { get; set; } = true;
+
+        /// <summary>
+        /// 鼠标移动距离换算：是否启用手动显示器参数（高级）
+        /// </summary>
+        public bool MouseDistanceUseManualProfile { get; set; } = false;
+
+        /// <summary>
+        /// 手动配置分辨率宽度（像素）
+        /// </summary>
+        public int MouseDistanceManualResolutionWidth { get; set; } = 3200;
+
+        /// <summary>
+        /// 手动配置分辨率高度（像素）
+        /// </summary>
+        public int MouseDistanceManualResolutionHeight { get; set; } = 2000;
+
+        /// <summary>
+        /// 手动配置显示器对角线尺寸（英寸）
+        /// </summary>
+        public double MouseDistanceManualDiagonalInch { get; set; } = 14.0;
+
+        /// <summary>
+        /// 手动配置显示缩放百分比（100=不缩放）
+        /// </summary>
+        public int MouseDistanceManualScalePercent { get; set; } = 100;
+
+        /// <summary>
+        /// 距离校准系数（高级）
+        /// </summary>
+        public double MouseDistanceCalibrationFactor { get; set; } = 1.0;
+
+        /// <summary>
+        /// 是否启用电脑使用统计采集
+        /// </summary>
+        public bool EnableUsageStatistics { get; set; } = false;
     }
 
     /// <summary>

@@ -51,6 +51,11 @@ namespace eyesharp.Services.UsageStats
         void HandleActivityStateChanged(ActivityStateChangedEventArgs args);
 
         /// <summary>
+        /// 处理输入计数器更新（由InputMonitorService触发）
+        /// </summary>
+        void HandleCounterUpdated(InputCounterEventArgs args);
+
+        /// <summary>
         /// 处理锁屏事件
         /// </summary>
         void HandleLockScreen();
@@ -59,6 +64,11 @@ namespace eyesharp.Services.UsageStats
         /// 处理解锁事件
         /// </summary>
         void HandleUnlockScreen();
+
+        /// <summary>
+        /// 立即采集当前输入快照并入账
+        /// </summary>
+        void CaptureSnapshotNow();
 
         /// <summary>
         /// 手动保存数据

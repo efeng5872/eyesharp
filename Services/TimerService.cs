@@ -30,6 +30,7 @@ namespace eyesharp.Services
 
         private readonly ILockStateService _lockStateService;
         private readonly eyesharp.Services.UsageStats.IInputMonitorService? _inputMonitorService;
+        private bool _usageStatisticsEnabled;
 
         // 策略3：到点且锁屏时，等待解锁后开始新主倒计时
         private bool _isWaitingForUnlock = false;
@@ -305,6 +306,7 @@ namespace eyesharp.Services
             _logService = logService;
             _lockStateService = lockStateService ?? new WindowsLockStateService(logService);
             _inputMonitorService = inputMonitorService;
+            _usageStatisticsEnabled = false;
             _lockStateService.LockStateChanged += OnLockStateChanged;
 
             // 订阅输入监控状态变化
@@ -323,6 +325,20 @@ namespace eyesharp.Services
         private void OnInputActivityStateChanged(object? sender, eyesharp.Services.UsageStats.ActivityStateChangedEventArgs e)
         {
             _logService?.Debug($"[TimerService] 输入状态变化: {e.OldState} -> {e.NewState}, 持续时间{e.PreviousStateDuration.TotalMinutes:F1}分钟");
+        }
+
+        /// <summary>
+        /// 设置电脑使用统计采集开关
+        /// </summary>
+        public void SetUsageStatisticsEnabled(bool enabled)
+        {
+            _usageStatisticsEnabled = enabled;
+
+            if (!enabled && _inputMonitorService != null && _inputMonitorService.IsRunning)
+            {
+                _inputMonitorService.Stop();
+                _logService?.Info("[TimerService] 电脑使用统计已关闭，输入监控服务已停止");
+            }
         }
 
         /// <summary>
@@ -346,8 +362,8 @@ namespace eyesharp.Services
             // 在锁外启动定时器，避免死锁
             _timer?.Change(0, 1000);
 
-            // 启动输入监控服务
-            if (_inputMonitorService != null && !_inputMonitorService.IsRunning)
+            // 启动输入监控服务（受电脑使用统计开关控制）
+            if (_usageStatisticsEnabled && _inputMonitorService != null && !_inputMonitorService.IsRunning)
             {
                 _inputMonitorService.Start();
                 _logService?.Info("[TimerService] 输入监控服务已启动");

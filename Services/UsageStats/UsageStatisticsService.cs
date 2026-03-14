@@ -194,26 +194,11 @@ namespace eyesharp.Services.UsageStats
             }
 
             var now = DateTime.Now;
-            var newHour = now.Date.AddHours(now.Hour);
-            HourlyActivityRecord? recordToPersist = null;
+            HourlyActivityRecord? recordToPersist;
 
             lock (_lock)
             {
-                if (newHour > _currentHour)
-                {
-                    recordToPersist = CloneHourlyRecord(_currentHourRecord);
-                    recordToPersist.IsCompleteHour = true;
-                    _currentHour = newHour;
-                    _currentHourRecord = new HourlyActivityRecord
-                    {
-                        Hour = _currentHour,
-                        FirstRecordTime = now,
-                        LastUpdateTime = now,
-                        IsCompleteHour = false
-                    };
-
-                    _logService.Debug($"[UsageStatistics] 切换到新小时: {_currentHour:yyyy-MM-dd HH:mm}");
-                }
+                RotateCurrentHourIfNeeded(now, out recordToPersist);
 
                 var durationSeconds = Math.Max(0, (int)args.PreviousStateDuration.TotalSeconds);
                 switch (args.OldState)
@@ -229,17 +214,30 @@ namespace eyesharp.Services.UsageStats
                         break;
                 }
 
-                var delta = CalculateCounterDelta(args.CounterSnapshot, _lastCounterSnapshot);
-                _currentHourRecord.KeyPressCount += delta.KeyPressCount;
-                _currentHourRecord.MouseMoveDistance += delta.MouseMoveDistance;
-                _currentHourRecord.MouseLeftClickCount += delta.MouseLeftClickCount;
-                _currentHourRecord.MouseRightClickCount += delta.MouseRightClickCount;
-                _currentHourRecord.MouseMiddleClickCount += delta.MouseMiddleClickCount;
-                _currentHourRecord.MouseWheelScrollCount += delta.MouseWheelScrollCount;
+                ApplyInputCounterSnapshot(args.CounterSnapshot, now);
+            }
 
-                _lastCounterSnapshot = CloneCounter(args.CounterSnapshot);
-                _currentHourRecord.LastUpdateTime = now;
-                _currentHourRecord.IsCompleteHour = false;
+            if (recordToPersist != null)
+            {
+                _ = PersistHourlyRecordSafeAsync(recordToPersist);
+            }
+        }
+
+        /// <inheritdoc />
+        public void HandleCounterUpdated(InputCounterEventArgs args)
+        {
+            if (!_isInitialized)
+            {
+                return;
+            }
+
+            var now = DateTime.Now;
+            HourlyActivityRecord? recordToPersist;
+
+            lock (_lock)
+            {
+                RotateCurrentHourIfNeeded(now, out recordToPersist);
+                ApplyInputCounterSnapshot(args.Counter, now);
             }
 
             if (recordToPersist != null)
@@ -270,6 +268,24 @@ namespace eyesharp.Services.UsageStats
         public void HandleUnlockScreen()
         {
             _logService.Debug("[UsageStatistics] 记录解锁事件");
+        }
+
+        /// <inheritdoc />
+        public void CaptureSnapshotNow()
+        {
+            if (!_isInitialized)
+            {
+                return;
+            }
+
+            var snapshot = _inputMonitorService.GetCurrentCounter();
+            HandleCounterUpdated(new InputCounterEventArgs
+            {
+                RecordTime = DateTime.Now,
+                Counter = snapshot,
+                CurrentState = _inputMonitorService.CurrentState
+            });
+            _logService.Debug("[UsageStatistics] 手动触发即时快照入账完成");
         }
 
         /// <inheritdoc />
@@ -548,6 +564,46 @@ namespace eyesharp.Services.UsageStats
                 MouseMiddleClickCount = Math.Max(0, current.MouseMiddleClickCount - previous.MouseMiddleClickCount),
                 MouseWheelScrollCount = Math.Max(0, current.MouseWheelScrollCount - previous.MouseWheelScrollCount)
             };
+        }
+
+        private void RotateCurrentHourIfNeeded(DateTime now, out HourlyActivityRecord? recordToPersist)
+        {
+            recordToPersist = null;
+            var newHour = now.Date.AddHours(now.Hour);
+            if (newHour <= _currentHour)
+            {
+                return;
+            }
+
+            recordToPersist = CloneHourlyRecord(_currentHourRecord);
+            recordToPersist.IsCompleteHour = true;
+            _currentHour = newHour;
+            _currentHourRecord = new HourlyActivityRecord
+            {
+                Hour = _currentHour,
+                FirstRecordTime = now,
+                LastUpdateTime = now,
+                IsCompleteHour = false
+            };
+
+            _logService.Debug($"[UsageStatistics] 切换到新小时: {_currentHour:yyyy-MM-dd HH:mm}");
+        }
+
+        private void ApplyInputCounterSnapshot(InputEventCounter currentSnapshot, DateTime now)
+        {
+            var delta = CalculateCounterDelta(currentSnapshot, _lastCounterSnapshot);
+            _currentHourRecord.KeyPressCount += delta.KeyPressCount;
+            _currentHourRecord.MouseMoveDistance += delta.MouseMoveDistance;
+            _currentHourRecord.MouseLeftClickCount += delta.MouseLeftClickCount;
+            _currentHourRecord.MouseRightClickCount += delta.MouseRightClickCount;
+            _currentHourRecord.MouseMiddleClickCount += delta.MouseMiddleClickCount;
+            _currentHourRecord.MouseWheelScrollCount += delta.MouseWheelScrollCount;
+
+            _lastCounterSnapshot = CloneCounter(currentSnapshot);
+            _currentHourRecord.LastUpdateTime = now;
+            _currentHourRecord.IsCompleteHour = false;
+
+            _logService.Debug($"[UsageStatistics] 输入增量入账: 按键+{delta.KeyPressCount}, 左键+{delta.MouseLeftClickCount}, 右键+{delta.MouseRightClickCount}, 中键+{delta.MouseMiddleClickCount}, 滚轮+{delta.MouseWheelScrollCount}, 移动+{delta.MouseMoveDistance}");
         }
 
         private async Task PersistHourlyRecordSafeAsync(HourlyActivityRecord record)

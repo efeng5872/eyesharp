@@ -108,6 +108,11 @@ namespace eyesharp.Services
         /// 获取是否处于等待解锁状态（策略3：到点且锁屏）
         /// </summary>
         bool IsWaitingForUnlock { get; }
+
+        /// <summary>
+        /// 设置电脑使用统计采集开关
+        /// </summary>
+        void SetUsageStatisticsEnabled(bool enabled);
     }
 
     /// <summary>

@@ -118,46 +118,55 @@ namespace eyesharp
                     await usageStatsService.InitializeAsync();
                     logService?.Info("使用统计服务初始化完成");
 
-                    // 连接输入监控服务和使用统计服务
-                    if (inputMonitorService != null)
-                    {
-                        inputMonitorService.ActivityStateChanged += (s, e) =>
-                        {
-                            usageStatsService.HandleActivityStateChanged(e);
-                        };
-                        inputMonitorService.CounterUpdated += (s, e) =>
-                        {
-                            // 可以在这里处理计数器更新
-                            logService?.Debug($"[App] 输入计数更新: 按键{e.Counter.KeyPressCount}次");
-                        };
+                    var usageStatsEnabled = _currentConfig.EnableUsageStatistics;
 
-                        // 修复：独立启动输入监控服务，不依赖于护眼倒计时
-                        if (!inputMonitorService.IsRunning)
+                    if (usageStatsEnabled)
+                    {
+                        // 连接输入监控服务和使用统计服务
+                        if (inputMonitorService != null)
                         {
-                            inputMonitorService.Start();
-                            logService?.Info("[App] 输入监控服务已独立启动");
+                            inputMonitorService.ActivityStateChanged += (s, e) =>
+                            {
+                                usageStatsService.HandleActivityStateChanged(e);
+                            };
+                            inputMonitorService.CounterUpdated += (s, e) =>
+                            {
+                                usageStatsService.HandleCounterUpdated(e);
+                                logService?.Debug($"[App] 输入计数更新已入账: 按键{e.Counter.KeyPressCount}次");
+                            };
+
+                            // 修复：独立启动输入监控服务，不依赖于护眼倒计时
+                            if (!inputMonitorService.IsRunning)
+                            {
+                                inputMonitorService.Start();
+                                logService?.Info("[App] 输入监控服务已独立启动");
+                            }
+
+                            logService?.Info("输入监控服务与使用统计服务已连接");
                         }
 
-                        logService?.Info("输入监控服务与使用统计服务已连接");
-                    }
-
-                    // 修复：连接锁屏事件到使用统计服务
-                    if (lockStateService != null)
-                    {
-                        lockStateService.LockStateChanged += (s, e) =>
+                        // 修复：连接锁屏事件到使用统计服务
+                        if (lockStateService != null)
                         {
-                            if (e.IsLocked)
+                            lockStateService.LockStateChanged += (s, e) =>
                             {
-                                usageStatsService.HandleLockScreen();
-                                logService?.Debug("[App] 锁屏事件已传递给使用统计服务");
-                            }
-                            else
-                            {
-                                usageStatsService.HandleUnlockScreen();
-                                logService?.Debug("[App] 解锁事件已传递给使用统计服务");
-                            }
-                        };
-                        logService?.Info("锁屏状态服务与使用统计服务已连接");
+                                if (e.IsLocked)
+                                {
+                                    usageStatsService.HandleLockScreen();
+                                    logService?.Debug("[App] 锁屏事件已传递给使用统计服务");
+                                }
+                                else
+                                {
+                                    usageStatsService.HandleUnlockScreen();
+                                    logService?.Debug("[App] 解锁事件已传递给使用统计服务");
+                                }
+                            };
+                            logService?.Info("锁屏状态服务与使用统计服务已连接");
+                        }
+                    }
+                    else
+                    {
+                        logService?.Info("电脑使用统计已关闭：跳过输入监控和锁屏统计连接");
                     }
                 }
 
@@ -192,8 +201,10 @@ namespace eyesharp
                 var timerService = ServiceProvider.GetService<ITimerService>();
                 var statisticsService = ServiceProvider.GetService<IStatisticsService>();
                 logService?.Info("开始创建 MainViewModel");
-                _mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, statisticsService!, usageStatsService!, themeService!, _currentConfig);
-                logService?.Info("MainViewModel 创建成功");
+                var mouseDistanceConverterService = ServiceProvider.GetService<IMouseDistanceConverterService>();
+                _mainViewModel = new MainViewModel(configService, logService!, timerService!, passwordService!, statisticsService!, usageStatsService!, themeService!, mouseDistanceConverterService!, _currentConfig);
+                timerService?.SetUsageStatisticsEnabled(_currentConfig.EnableUsageStatistics);
+                logService?.Info($"MainViewModel 创建成功，电脑使用统计开关={_currentConfig.EnableUsageStatistics}");
 
                 var mainWindow = new MainWindow(_mainViewModel);
                 logService?.Info("MainWindow 创建成功，准备显示");
@@ -378,6 +389,7 @@ namespace eyesharp
             });
             services.AddSingleton<IStatisticsService, StatisticsService>();
             services.AddSingleton<IThemeService, ThemeService>();
+            services.AddSingleton<IMouseDistanceConverterService, MouseDistanceConverterService>();
             services.AddSingleton<LogCleanupService>();
 
             _serviceProvider = services.BuildServiceProvider();

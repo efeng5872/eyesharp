@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 using eyesharp.Models;
 using eyesharp.Services;
 using eyesharp.Services.UsageStats;
@@ -22,6 +23,12 @@ namespace eyesharp.Views
         private readonly IUsageStatisticsService _usageStatsService;
         private readonly ILogService _logService;
         private readonly IThemeService _themeService;
+        private readonly IMouseDistanceConverterService _mouseDistanceConverterService;
+        private readonly DispatcherTimer _usageAutoRefreshTimer;
+        private readonly bool _usageStatisticsEnabled;
+        private bool _isRefreshing;
+        private bool _pendingRefresh;
+        private DailyUsageStatistics? _lastDisplayedUsageStats;
 
         // 分页相关
         private int _currentPage = 1;
@@ -34,12 +41,22 @@ namespace eyesharp.Views
             IStatisticsService statisticsService,
             IUsageStatisticsService usageStatsService,
             ILogService logService,
-            IThemeService themeService)
+            IThemeService themeService,
+            IMouseDistanceConverterService mouseDistanceConverterService)
         {
             _statisticsService = statisticsService;
             _usageStatsService = usageStatsService;
             _logService = logService;
             _themeService = themeService;
+            _mouseDistanceConverterService = mouseDistanceConverterService;
+
+            _usageAutoRefreshTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(12)
+            };
+            _usageAutoRefreshTimer.Tick += UsageAutoRefreshTimer_Tick;
+
+            _usageStatisticsEnabled = App.CurrentConfig.EnableUsageStatistics;
 
             InitializeComponent();
 
@@ -52,6 +69,10 @@ namespace eyesharp.Views
         /// </summary>
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            _usageAutoRefreshTimer.Stop();
+            _isRefreshing = false;
+            _pendingRefresh = false;
+
             if (_themeService != null)
             {
                 _themeService.ThemeChanged -= OnThemeChanged;
@@ -84,7 +105,12 @@ namespace eyesharp.Views
             // 初始化日期筛选器（默认本周）
             InitializeDateFilter();
 
-            RefreshStatistics();
+            _ = TriggerRefreshAsync("窗口加载");
+            _usageAutoRefreshTimer.Start();
+            _logService.Info("统计窗口自动刷新已启动，间隔12秒");
+
+            UsageDisabledHintText.Visibility = _usageStatisticsEnabled ? Visibility.Collapsed : Visibility.Visible;
+            UpdateTodayOverviewCardLayout();
         }
 
         /// <summary>
@@ -94,6 +120,22 @@ namespace eyesharp.Views
         {
             // 默认显示本周数据（周一到周日）
             SetWeekFilter();
+        }
+
+        /// <summary>
+        /// 设置本日筛选
+        /// </summary>
+        private void SetDayFilter()
+        {
+            var today = DateTime.Now.Date;
+            _filterStartDate = today;
+            _filterEndDate = today;
+
+            StartDatePicker.SelectedDate = _filterStartDate;
+            EndDatePicker.SelectedDate = _filterEndDate;
+            _currentPage = 1;
+
+            _logService.Info($"设置本日筛选：{_filterStartDate:yyyy-MM-dd}");
         }
 
         /// <summary>
@@ -134,30 +176,56 @@ namespace eyesharp.Views
         /// <summary>
         /// 刷新按钮点击
         /// </summary>
-        private void RefreshButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
             _logService.Info("用户点击刷新统计");
-            RefreshStatistics();
+            await TriggerRefreshAsync("手动刷新");
         }
 
         /// <summary>
         /// 刷新统计数据
         /// </summary>
-        private void RefreshStatistics()
+        private async Task RefreshStatisticsAsync()
         {
+            // 护眼统计
+            RefreshEyeProtectionStats();
+
+            // 电脑使用统计
+            await RefreshUsageStatsAsync();
+
+            _logService.Info("统计数据刷新完成");
+        }
+
+        private async Task TriggerRefreshAsync(string triggerSource)
+        {
+            if (_isRefreshing)
+            {
+                if (triggerSource == "手动刷新")
+                {
+                    _pendingRefresh = true;
+                    _logService.Info("统计刷新进行中，已标记手动补刷一次");
+                }
+                else
+                {
+                    _logService.Debug($"统计刷新进行中，跳过触发源: {triggerSource}");
+                }
+                return;
+            }
+
+            _isRefreshing = true;
             try
             {
-                // 护眼统计
-                RefreshEyeProtectionStats();
+                if (triggerSource == "手动刷新" || triggerSource == "手动补刷")
+                {
+                    _usageStatsService?.CaptureSnapshotNow();
+                    _logService.Debug($"手动刷新前置采样完成，触发源: {triggerSource}");
+                }
 
-                // 电脑使用统计
-                RefreshUsageStats();
-
-                _logService.Info("统计数据刷新完成");
+                await RefreshStatisticsAsync();
             }
             catch (Exception ex)
             {
-                _logService.Error(ex, "刷新统计数据失败");
+                _logService.Error(ex, $"刷新统计数据失败，触发源: {triggerSource}");
                 MessageBox.Show(
                     "刷新统计数据失败：" + ex.Message,
                     "错误",
@@ -165,6 +233,68 @@ namespace eyesharp.Views
                     MessageBoxImage.Error
                 );
             }
+            finally
+            {
+                _isRefreshing = false;
+            }
+
+            if (_pendingRefresh)
+            {
+                _pendingRefresh = false;
+                _logService.Info("执行手动补刷");
+                await TriggerRefreshAsync("手动补刷");
+            }
+        }
+
+        private async void UsageAutoRefreshTimer_Tick(object? sender, EventArgs e)
+        {
+            _logService.Debug("统计窗口自动刷新触发");
+            await TriggerRefreshAsync("自动刷新");
+        }
+
+        private void TodayOverviewHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateTodayOverviewCardLayout();
+        }
+
+        private void DailyUsageDataGrid_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (UsageTabScrollViewer == null)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            UsageTabScrollViewer.ScrollToVerticalOffset(UsageTabScrollViewer.VerticalOffset - e.Delta);
+        }
+
+        private void RecordsDataGrid_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (EyeTabScrollViewer == null)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            EyeTabScrollViewer.ScrollToVerticalOffset(EyeTabScrollViewer.VerticalOffset - e.Delta);
+        }
+
+        private void UpdateTodayOverviewCardLayout()
+        {
+            if (TodayOverviewHost == null || TodayOverviewPanel == null)
+            {
+                return;
+            }
+
+            var hostWidth = TodayOverviewHost.ActualWidth;
+            var columns = hostWidth >= 980 ? 5 : 3;
+            var cardWidth = columns == 5 ? 172 : 220;
+
+            TodayBootTimeCard.Width = cardWidth;
+            TodayActiveTimeCard.Width = cardWidth;
+            TodayIdleTimeCard.Width = cardWidth;
+            TodayLockScreenCountCard.Width = cardWidth;
+            TodayLockScreenTimeCard.Width = cardWidth;
         }
 
         /// <summary>
@@ -273,6 +403,15 @@ namespace eyesharp.Views
         }
 
         /// <summary>
+        /// 本日筛选按钮点击
+        /// </summary>
+        private void DayFilterButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetDayFilter();
+            LoadPagedRecords();
+        }
+
+        /// <summary>
         /// 本周筛选按钮点击
         /// </summary>
         private void WeekFilterButton_Click(object sender, RoutedEventArgs e)
@@ -293,7 +432,7 @@ namespace eyesharp.Views
         /// <summary>
         /// 刷新电脑使用统计数据
         /// </summary>
-        private async void RefreshUsageStats()
+        private async Task RefreshUsageStatsAsync()
         {
             if (_usageStatsService == null)
             {
@@ -301,129 +440,184 @@ namespace eyesharp.Views
                 return;
             }
 
-            try
+            // 今日统计
+            var todayStats = await _usageStatsService.GetTodayStatisticsAsync();
+            TodayBootTimeText.Text = FormatDurationHoursMinutes(todayStats.TotalBootSeconds);
+            TodayActiveTimeText.Text = FormatDurationHoursMinutes(todayStats.ActiveSeconds);
+            TodayIdleTimeText.Text = FormatDurationHoursMinutes(todayStats.IdleSeconds);
+            TodayLockScreenCountText.Text = todayStats.LockScreenCount.ToString();
+            TodayLockScreenTimeText.Text = FormatDurationHoursMinutes(todayStats.LockScreenSeconds);
+
+            // 输入统计
+            TodayKeyPressCountText.Text = todayStats.TotalKeyPressCount.ToString("N0");
+            var todayMouseMoveMeters = _mouseDistanceConverterService.ConvertPixelsToMeters(todayStats.TotalMouseMoveDistance);
+            TodayMouseMoveText.Text = $"{todayMouseMoveMeters:F1}米";
+            var totalClicks = todayStats.TotalMouseLeftClickCount +
+                              todayStats.TotalMouseRightClickCount +
+                              todayStats.TotalMouseMiddleClickCount;
+            TodayMouseClickText.Text = totalClicks.ToString("N0");
+            TodayMouseWheelText.Text = todayStats.TotalMouseWheelScrollCount.ToString("N0");
+
+            var realTimeStatus = await _usageStatsService.GetRealTimeStatusAsync();
+            UpdateUsagePerceivedInfo(todayStats, realTimeStatus.CurrentState);
+
+            // 24小时活跃柱状图
+            await BuildHourlyBarChartAsync();
+
+            // 本周概览
+            var weekStats = await _usageStatsService.GetWeekStatisticsAsync();
+            WeekActiveTimeText.Text = FormatDurationHoursMinutes(weekStats.ActiveSeconds);
+            var daysWithData = Math.Max(1, (DateTime.Now - weekStats.Date).Days + 1);
+            var avgDailySeconds = weekStats.ActiveSeconds / daysWithData;
+            WeekAvgDailyText.Text = FormatDurationHoursMinutes(avgDailySeconds);
+            var weekTotalInput = weekStats.TotalKeyPressCount +
+                                 weekStats.TotalMouseLeftClickCount +
+                                 weekStats.TotalMouseRightClickCount +
+                                 weekStats.TotalMouseMiddleClickCount;
+            WeekTotalInputText.Text = weekTotalInput.ToString("N0");
+
+            // 最近7天数据
+            var recentDailyData = await _usageStatsService.GetRecentDailyStatisticsAsync(7);
+            LoadDailyUsageDataGrid(recentDailyData);
+
+            _logService.Info("电脑使用统计数据刷新完成");
+        }
+
+        private void UpdateUsagePerceivedInfo(DailyUsageStatistics todayStats, eyesharp.Models.UserActivityState currentState)
+        {
+            UsageLastUpdatedText.Text = $"最后更新时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+
+            UsageSamplingStatusText.Text = currentState switch
             {
-                // 今日统计
-                var todayStats = await _usageStatsService.GetTodayStatisticsAsync();
-                TodayBootTimeText.Text = FormatDurationHoursMinutes(todayStats.TotalBootSeconds);
-                TodayActiveTimeText.Text = FormatDurationHoursMinutes(todayStats.ActiveSeconds);
-                TodayIdleTimeText.Text = FormatDurationHoursMinutes(todayStats.IdleSeconds);
-                TodayLockScreenCountText.Text = todayStats.LockScreenCount.ToString();
+                eyesharp.Models.UserActivityState.Active => "采样状态：采样中（输入持续累计）",
+                eyesharp.Models.UserActivityState.Idle => "采样状态：当前状态 Idle",
+                eyesharp.Models.UserActivityState.Locked => "采样状态：当前状态 Locked",
+                _ => "采样状态：当前状态 Unknown"
+            };
 
-                // 输入统计
-                TodayKeyPressCountText.Text = todayStats.TotalKeyPressCount.ToString("N0");
-                TodayMouseMoveText.Text = $"{todayStats.MouseMoveDistanceMeters:F1}米";
-                var totalClicks = todayStats.TotalMouseLeftClickCount +
-                                  todayStats.TotalMouseRightClickCount +
-                                  todayStats.TotalMouseMiddleClickCount;
-                TodayMouseClickText.Text = totalClicks.ToString("N0");
-                TodayMouseWheelText.Text = todayStats.TotalMouseWheelScrollCount.ToString("N0");
-
-                // 24小时热力图
-                await BuildHourlyHeatmapAsync();
-
-                // 本周概览
-                var weekStats = await _usageStatsService.GetWeekStatisticsAsync();
-                WeekActiveTimeText.Text = FormatDurationHoursMinutes(weekStats.ActiveSeconds);
-                var daysWithData = Math.Max(1, (DateTime.Now - weekStats.Date).Days + 1);
-                var avgDailySeconds = weekStats.ActiveSeconds / daysWithData;
-                WeekAvgDailyText.Text = FormatDurationHoursMinutes(avgDailySeconds);
-                var weekTotalInput = weekStats.TotalKeyPressCount +
-                                     weekStats.TotalMouseLeftClickCount +
-                                     weekStats.TotalMouseRightClickCount +
-                                     weekStats.TotalMouseMiddleClickCount;
-                WeekTotalInputText.Text = weekTotalInput.ToString("N0");
-
-                // 最近7天数据
-                var recentDailyData = await _usageStatsService.GetRecentDailyStatisticsAsync(7);
-                LoadDailyUsageDataGrid(recentDailyData);
-
-                _logService.Info("电脑使用统计数据刷新完成");
-            }
-            catch (Exception ex)
+            if (_lastDisplayedUsageStats == null)
             {
-                _logService.Error(ex, "刷新电脑使用统计数据失败");
+                UsageDeltaKeyText.Text = "按键 +0";
+                UsageDeltaClickText.Text = "鼠标点击 +0";
+                UsageDeltaWheelText.Text = "滚轮 +0";
+                UsageDeltaMoveText.Text = "指针移动 +0.0米";
             }
+            else
+            {
+                var keyDelta = Math.Max(0, todayStats.TotalKeyPressCount - _lastDisplayedUsageStats.TotalKeyPressCount);
+                var clickDelta = Math.Max(0,
+                    (todayStats.TotalMouseLeftClickCount + todayStats.TotalMouseRightClickCount + todayStats.TotalMouseMiddleClickCount)
+                    - (_lastDisplayedUsageStats.TotalMouseLeftClickCount + _lastDisplayedUsageStats.TotalMouseRightClickCount + _lastDisplayedUsageStats.TotalMouseMiddleClickCount));
+                var wheelDelta = Math.Max(0, todayStats.TotalMouseWheelScrollCount - _lastDisplayedUsageStats.TotalMouseWheelScrollCount);
+                var moveDeltaPixels = Math.Max(0, todayStats.TotalMouseMoveDistance - _lastDisplayedUsageStats.TotalMouseMoveDistance);
+                var moveDeltaMeters = _mouseDistanceConverterService.ConvertPixelsToMeters(moveDeltaPixels);
+
+                UsageDeltaKeyText.Text = $"按键 +{keyDelta:N0}";
+                UsageDeltaClickText.Text = $"鼠标点击 +{clickDelta:N0}";
+                UsageDeltaWheelText.Text = $"滚轮 +{wheelDelta:N0}";
+                UsageDeltaMoveText.Text = $"指针移动 +{moveDeltaMeters:F1}米";
+            }
+
+            _lastDisplayedUsageStats = new DailyUsageStatistics
+            {
+                TotalKeyPressCount = todayStats.TotalKeyPressCount,
+                TotalMouseLeftClickCount = todayStats.TotalMouseLeftClickCount,
+                TotalMouseRightClickCount = todayStats.TotalMouseRightClickCount,
+                TotalMouseMiddleClickCount = todayStats.TotalMouseMiddleClickCount,
+                TotalMouseWheelScrollCount = todayStats.TotalMouseWheelScrollCount,
+                TotalMouseMoveDistance = todayStats.TotalMouseMoveDistance
+            };
         }
 
         /// <summary>
-        /// 构建24小时热力图
+        /// 构建24小时堆叠柱状图（活跃/空闲/锁屏）
         /// </summary>
-        private async Task BuildHourlyHeatmapAsync()
+        private async Task BuildHourlyBarChartAsync()
         {
             try
             {
-                HourlyHeatmapGrid.Children.Clear();
+                HourlyBarChartGrid.Children.Clear();
+                HourlyBarChartGrid.ColumnDefinitions.Clear();
+                HourlyBarChartGrid.RowDefinitions.Clear();
 
                 var now = DateTime.Now;
                 var startOfDay = now.Date;
                 var hourlyData = await _usageStatsService.GetHourlyDataAsync(startOfDay, now);
 
-                // 创建24小时的热力图（4行 x 6列）
+                // 行：0=柱状区域，1=小时标签
+                HourlyBarChartGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                HourlyBarChartGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                var currentHour = DateTime.Now.Hour;
+
                 for (int hour = 0; hour < 24; hour++)
                 {
-                    var row = hour / 6;
-                    var col = hour % 6;
+                    HourlyBarChartGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
                     var record = hourlyData.FirstOrDefault(r => r.Hour.Hour == hour);
-                    var activityPercentage = GetActivityPercentage(record);
-
-                    var cell = new Border
+                    var activeSeconds = Math.Max(0, record?.ActiveSeconds ?? 0);
+                    var idleSeconds = Math.Max(0, record?.IdleSeconds ?? 0);
+                    var lockedSeconds = Math.Max(0, record?.LockScreenSeconds ?? 0);
+                    var totalSeconds = activeSeconds + idleSeconds + lockedSeconds;
+                    if (totalSeconds <= 0)
                     {
-                        Style = (Style)FindResource("HeatmapCellStyle"),
-                        Background = GetHeatmapColor(activityPercentage),
-                        ToolTip = $"{hour:00}:00 - {hour:59}:59\n活跃度: {activityPercentage}%\n" +
-                                  $"活跃: {record?.ActiveSeconds ?? 0}秒\n空闲: {record?.IdleSeconds ?? 0}秒\n锁屏: {record?.LockScreenSeconds ?? 0}秒"
+                        totalSeconds = 1;
+                    }
+
+                    var activeStar = activeSeconds / (double)totalSeconds;
+                    var idleStar = idleSeconds / (double)totalSeconds;
+                    var lockedStar = lockedSeconds / (double)totalSeconds;
+
+                    var barContainer = new Grid
+                    {
+                        Height = 120,
+                        VerticalAlignment = VerticalAlignment.Bottom,
+                        Margin = new Thickness(1, 0, 1, 0),
+                        ToolTip = $"{hour:00}:00 - {hour:59}:59\n活跃: {activeSeconds / 60.0:F1}分\n空闲: {idleSeconds / 60.0:F1}分\n锁屏: {lockedSeconds / 60.0:F1}分"
                     };
 
-                    var timeText = new TextBlock
-                    {
-                        Text = $"{hour:00}",
-                        FontSize = 11,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Foreground = activityPercentage > 50 ? Brushes.White : Brushes.Black
-                    };
+                    barContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(lockedStar, GridUnitType.Star) });
+                    barContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(idleStar, GridUnitType.Star) });
+                    barContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(activeStar, GridUnitType.Star) });
 
-                    cell.Child = timeText;
-                    Grid.SetRow(cell, row);
-                    Grid.SetColumn(cell, col);
-                    HourlyHeatmapGrid.Children.Add(cell);
+                    var lockedBar = new Border { Background = new SolidColorBrush(Color.FromRgb(251, 140, 0)) };
+                    var idleBar = new Border { Background = new SolidColorBrush(Color.FromRgb(144, 164, 174)) };
+                    var activeBar = new Border { Background = new SolidColorBrush(Color.FromRgb(67, 160, 71)) };
+
+                    Grid.SetRow(lockedBar, 0);
+                    Grid.SetRow(idleBar, 1);
+                    Grid.SetRow(activeBar, 2);
+                    barContainer.Children.Add(lockedBar);
+                    barContainer.Children.Add(idleBar);
+                    barContainer.Children.Add(activeBar);
+
+                    Grid.SetRow(barContainer, 0);
+                    Grid.SetColumn(barContainer, hour);
+                    HourlyBarChartGrid.Children.Add(barContainer);
+
+                    if (hour % 2 == 0)
+                    {
+                        var label = new TextBlock
+                        {
+                            Text = hour.ToString("00"),
+                            FontSize = 10,
+                            FontWeight = hour == currentHour ? FontWeights.SemiBold : FontWeights.Normal,
+                            Foreground = hour == currentHour
+                                ? new SolidColorBrush(Color.FromRgb(25, 118, 210))
+                                : (Brush)FindResource("TextSecondaryBrush"),
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 4, 0, 0)
+                        };
+                        Grid.SetRow(label, 1);
+                        Grid.SetColumn(label, hour);
+                        HourlyBarChartGrid.Children.Add(label);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logService.Error(ex, "构建热力图失败");
+                _logService.Error(ex, "构建24小时柱状图失败");
             }
-        }
-
-        /// <summary>
-        /// 获取活跃度百分比
-        /// </summary>
-        private int GetActivityPercentage(HourlyActivityRecord? record)
-        {
-            if (record == null) return 0;
-
-            var totalSeconds = record.ActiveSeconds + record.IdleSeconds + record.LockScreenSeconds;
-            if (totalSeconds == 0) return 0;
-
-            return (int)((double)record.ActiveSeconds / totalSeconds * 100);
-        }
-
-        /// <summary>
-        /// 获取热力图颜色
-        /// </summary>
-        private Brush GetHeatmapColor(int activityPercentage)
-        {
-            // 使用蓝色渐变：从浅蓝到深蓝
-            return activityPercentage switch
-            {
-                0 => new SolidColorBrush(Color.FromRgb(227, 242, 253)),     // #E3F2FD 最浅
-                <= 25 => new SolidColorBrush(Color.FromRgb(187, 222, 251)), // #BBDEFB
-                <= 50 => new SolidColorBrush(Color.FromRgb(144, 202, 249)), // #90CAF9
-                <= 75 => new SolidColorBrush(Color.FromRgb(66, 165, 245)),  // #42A5F5
-                _ => new SolidColorBrush(Color.FromRgb(21, 101, 192))      // #1565C0 最深
-            };
         }
 
         /// <summary>
@@ -438,7 +632,7 @@ namespace eyesharp.Views
                 ActiveTime = FormatDurationHoursMinutes(d.ActiveSeconds),
                 LockScreenCount = d.LockScreenCount,
                 KeyPressCount = d.TotalKeyPressCount.ToString("N0"),
-                MouseMove = $"{d.MouseMoveDistanceMeters:F1}米"
+                MouseMove = $"{_mouseDistanceConverterService.ConvertPixelsToMeters(d.TotalMouseMoveDistance):F1}米"
             }).ToList();
 
             DailyUsageDataGrid.ItemsSource = displayData;

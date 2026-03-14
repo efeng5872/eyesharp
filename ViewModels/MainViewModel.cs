@@ -24,6 +24,7 @@ namespace eyesharp.ViewModels
         private readonly IStatisticsService _statisticsService;
         private readonly eyesharp.Services.UsageStats.IUsageStatisticsService _usageStatsService;
         private readonly IThemeService _themeService;
+        private readonly IMouseDistanceConverterService _mouseDistanceConverterService;
         private AppConfig _config;
         private RestWindow? _currentRestWindow;
         private WinForms.NotifyIcon? _trayIcon;
@@ -74,6 +75,9 @@ namespace eyesharp.ViewModels
         private bool _showInTray = true;
 
         [ObservableProperty]
+        private bool _enableUsageStatistics = false;
+
+        [ObservableProperty]
         private string _versionInfo = "EyeSharp v1.0.0";
 
         // 日志级别选项
@@ -110,6 +114,28 @@ namespace eyesharp.ViewModels
         [ObservableProperty]
         private bool _isLockScreenBehaviorSkip = false;
 
+        // 指针移动距离换算（高级）
+        [ObservableProperty]
+        private bool _mouseDistanceUseAutoDpi = true;
+
+        [ObservableProperty]
+        private bool _mouseDistanceUseManualProfile = false;
+
+        [ObservableProperty]
+        private int _mouseDistanceManualResolutionWidth = 3200;
+
+        [ObservableProperty]
+        private int _mouseDistanceManualResolutionHeight = 2000;
+
+        [ObservableProperty]
+        private double _mouseDistanceManualDiagonalInch = 14.0;
+
+        [ObservableProperty]
+        private int _mouseDistanceManualScalePercent = 100;
+
+        [ObservableProperty]
+        private double _mouseDistanceCalibrationFactor = 1.0;
+
         // Toast通知属性
         [ObservableProperty]
         private System.Windows.Visibility _toastVisibility = System.Windows.Visibility.Collapsed;
@@ -130,6 +156,7 @@ namespace eyesharp.ViewModels
             IStatisticsService statisticsService,
             eyesharp.Services.UsageStats.IUsageStatisticsService usageStatsService,
             IThemeService themeService,
+            IMouseDistanceConverterService mouseDistanceConverterService,
             AppConfig config)
         {
             _configService = configService;
@@ -139,6 +166,7 @@ namespace eyesharp.ViewModels
             _statisticsService = statisticsService;
             _usageStatsService = usageStatsService;
             _themeService = themeService;
+            _mouseDistanceConverterService = mouseDistanceConverterService;
             _config = config;
 
             // 更新UI属性
@@ -163,6 +191,20 @@ namespace eyesharp.ViewModels
 
             // 初始化锁屏处理行为
             InitializeLockScreenBehavior();
+
+            // 初始化指针距离换算高级设置
+            MouseDistanceUseAutoDpi = _config.MouseDistanceUseAutoDpi;
+            MouseDistanceUseManualProfile = _config.MouseDistanceUseManualProfile;
+            if (!MouseDistanceUseAutoDpi && !MouseDistanceUseManualProfile)
+            {
+                MouseDistanceUseAutoDpi = true;
+            }
+            MouseDistanceManualResolutionWidth = _config.MouseDistanceManualResolutionWidth;
+            MouseDistanceManualResolutionHeight = _config.MouseDistanceManualResolutionHeight;
+            MouseDistanceManualDiagonalInch = _config.MouseDistanceManualDiagonalInch;
+            MouseDistanceManualScalePercent = _config.MouseDistanceManualScalePercent;
+            MouseDistanceCalibrationFactor = _config.MouseDistanceCalibrationFactor;
+            EnableUsageStatistics = _config.EnableUsageStatistics;
 
             // 同步开机自启动状态（以注册表实际状态为准）
             AutoStart = AutoStartHelper.IsAutoStartEnabled();
@@ -190,6 +232,8 @@ namespace eyesharp.ViewModels
                 concreteTimerService.IsPreReminderEnabled = _config.IsPreReminderEnabled;
                 concreteTimerService.PreReminderIntervals = _config.PreReminderIntervals;
             }
+
+            _timerService.SetUsageStatisticsEnabled(EnableUsageStatistics);
 
             StatusText = "运行中";
             _logService.Info("配置加载成功");
@@ -578,6 +622,17 @@ namespace eyesharp.ViewModels
         [RelayCommand]
         private async System.Threading.Tasks.Task ApplySettingsAsync()
         {
+            await SaveSettingsAsync(restartTimer: false);
+        }
+
+        [RelayCommand]
+        private async System.Threading.Tasks.Task ApplyTimerStrategyNowAsync()
+        {
+            await SaveSettingsAsync(restartTimer: true);
+        }
+
+        private async System.Threading.Tasks.Task SaveSettingsAsync(bool restartTimer)
+        {
             try
             {
                 // 验证输入
@@ -593,6 +648,14 @@ namespace eyesharp.ViewModels
                     return;
                 }
 
+                var lockScreenBehaviorType = GetLockScreenBehaviorType();
+                var lockScreenBehaviorConfig = LockScreenBehaviorConverter.ToConfig(lockScreenBehaviorType);
+                var timeStrategyChanged =
+                    _config.RestIntervalMinutes != RestIntervalMinutes ||
+                    _config.RestDurationSeconds != RestDurationSeconds ||
+                    _config.IsPreReminderEnabled != IsPreReminderEnabled ||
+                    _config.LockScreenBehavior != lockScreenBehaviorConfig;
+
                 // 更新配置
                 _config.RestIntervalMinutes = RestIntervalMinutes;
                 _config.RestDurationSeconds = RestDurationSeconds;
@@ -603,8 +666,16 @@ namespace eyesharp.ViewModels
                 _config.LogLevel = SelectedLogLevel;
                 _config.IsPreReminderEnabled = IsPreReminderEnabled;
                 _config.Theme = IsDarkTheme ? "dark" : "light";
-                var lockScreenBehaviorType = GetLockScreenBehaviorType();
-                _config.LockScreenBehavior = LockScreenBehaviorConverter.ToConfig(lockScreenBehaviorType);
+                _config.LockScreenBehavior = lockScreenBehaviorConfig;
+
+                _config.MouseDistanceUseAutoDpi = MouseDistanceUseAutoDpi;
+                _config.MouseDistanceUseManualProfile = MouseDistanceUseManualProfile;
+                _config.MouseDistanceManualResolutionWidth = MouseDistanceManualResolutionWidth;
+                _config.MouseDistanceManualResolutionHeight = MouseDistanceManualResolutionHeight;
+                _config.MouseDistanceManualDiagonalInch = MouseDistanceManualDiagonalInch;
+                _config.MouseDistanceManualScalePercent = MouseDistanceManualScalePercent;
+                _config.MouseDistanceCalibrationFactor = MouseDistanceCalibrationFactor;
+                _config.EnableUsageStatistics = EnableUsageStatistics;
 
                 // 应用日志级别变更
                 _logService.SetLogLevel(SelectedLogLevel);
@@ -617,6 +688,7 @@ namespace eyesharp.ViewModels
 
                 // 同步锁屏行为到 TimerService
                 _timerService.SetLockScreenBehavior(lockScreenBehaviorType);
+                _timerService.SetUsageStatisticsEnabled(EnableUsageStatistics);
 
                 // 保存配置
                 await _configService.SaveConfigAsync(_config);
@@ -632,12 +704,26 @@ namespace eyesharp.ViewModels
                     _logService.Warn("开机自启动设置失败");
                 }
 
-                // 重启倒计时
-                _timerService.Stop();
-                StartCountdown();
-
-                _logService.Info("设置已应用并重启倒计时");
-                ShowToast("✅ 设置已保存");
+                if (restartTimer)
+                {
+                    _timerService.Stop();
+                    StartCountdown();
+                    _logService.Info("设置已保存并立即应用计时策略（已重启倒计时）");
+                    ShowToast("✅ 设置已保存并立即应用计时策略");
+                }
+                else
+                {
+                    if (timeStrategyChanged)
+                    {
+                        _logService.Info("设置已保存（不重启倒计时，新的间隔/时长下个周期生效，当前倒计时不变）");
+                        ShowToast("✅ 设置已保存（下个周期生效，当前倒计时不变）");
+                    }
+                    else
+                    {
+                        _logService.Info("设置已保存（无需重启倒计时）");
+                        ShowToast("✅ 设置已保存");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -876,7 +962,8 @@ namespace eyesharp.ViewModels
                     _statisticsService,
                     _usageStatsService,
                     _logService,
-                    _themeService);
+                    _themeService,
+                    _mouseDistanceConverterService);
                 statisticsWindow.ShowDialog();
             }
             catch (Exception ex)
@@ -1170,6 +1257,30 @@ namespace eyesharp.ViewModels
             if (value)
             {
                 IsBlackMode = false;
+            }
+        }
+
+        partial void OnMouseDistanceUseManualProfileChanged(bool value)
+        {
+            if (value && MouseDistanceUseAutoDpi)
+            {
+                MouseDistanceUseAutoDpi = false;
+            }
+            else if (!value && !MouseDistanceUseAutoDpi)
+            {
+                MouseDistanceUseAutoDpi = true;
+            }
+        }
+
+        partial void OnMouseDistanceUseAutoDpiChanged(bool value)
+        {
+            if (value && MouseDistanceUseManualProfile)
+            {
+                MouseDistanceUseManualProfile = false;
+            }
+            else if (!value && !MouseDistanceUseManualProfile)
+            {
+                MouseDistanceUseManualProfile = true;
             }
         }
 

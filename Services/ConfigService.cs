@@ -153,7 +153,8 @@ namespace eyesharp.Services
                 CustomImagePath = "",
                 PasswordHash = "",
                 AutoStart = false,
-                LogLevel = "INFO"
+                LogLevel = "INFO",
+                EnableUsageStatistics = false
             };
         }
 
@@ -189,6 +190,24 @@ namespace eyesharp.Services
             // 锁屏处理行为（配置层 string，业务层会转换为 enum）
             config.LockScreenBehavior = LockScreenBehaviorConverter.ToConfig(
                 LockScreenBehaviorConverter.FromConfig(config.LockScreenBehavior));
+
+            // 鼠标移动距离换算高级配置
+            if (config.MouseDistanceManualResolutionWidth < 320)
+                config.MouseDistanceManualResolutionWidth = 320;
+            if (config.MouseDistanceManualResolutionHeight < 200)
+                config.MouseDistanceManualResolutionHeight = 200;
+            if (config.MouseDistanceManualDiagonalInch < 5)
+                config.MouseDistanceManualDiagonalInch = 5;
+            if (config.MouseDistanceManualDiagonalInch > 120)
+                config.MouseDistanceManualDiagonalInch = 120;
+            if (config.MouseDistanceManualScalePercent < 50)
+                config.MouseDistanceManualScalePercent = 50;
+            if (config.MouseDistanceManualScalePercent > 300)
+                config.MouseDistanceManualScalePercent = 300;
+            if (config.MouseDistanceCalibrationFactor <= 0)
+                config.MouseDistanceCalibrationFactor = 1.0;
+            if (config.MouseDistanceCalibrationFactor > 10)
+                config.MouseDistanceCalibrationFactor = 10.0;
         }
 
         /// <summary>

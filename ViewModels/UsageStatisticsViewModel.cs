@@ -18,6 +18,7 @@ namespace eyesharp.ViewModels
     {
         private readonly IUsageStatisticsService _usageStatsService;
         private readonly ILogService _logService;
+        private readonly IMouseDistanceConverterService _mouseDistanceConverterService;
 
         // 今日统计数据
         [ObservableProperty]
@@ -69,10 +70,11 @@ namespace eyesharp.ViewModels
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
 
-        public UsageStatisticsViewModel(IUsageStatisticsService usageStatsService, ILogService logService)
+        public UsageStatisticsViewModel(IUsageStatisticsService usageStatsService, ILogService logService, IMouseDistanceConverterService mouseDistanceConverterService)
         {
             _usageStatsService = usageStatsService ?? throw new ArgumentNullException(nameof(usageStatsService));
             _logService = logService ?? throw new ArgumentNullException(nameof(logService));
+            _mouseDistanceConverterService = mouseDistanceConverterService ?? throw new ArgumentNullException(nameof(mouseDistanceConverterService));
 
             RefreshCommand = new RelayCommand(async () => await RefreshAsync());
             ExportCommand = new RelayCommand(async () => await ExportAsync());
@@ -152,7 +154,7 @@ namespace eyesharp.ViewModels
             TodayLockScreenTime = FormatDuration(stats.LockScreenSeconds);
 
             TodayKeyPressCount = stats.TotalKeyPressCount;
-            TodayMouseMoveDistance = $"{stats.MouseMoveDistanceMeters:F2}米";
+            TodayMouseMoveDistance = $"{_mouseDistanceConverterService.ConvertPixelsToMeters(stats.TotalMouseMoveDistance):F2}米";
             TodayMouseClickCount = stats.TotalMouseLeftClickCount +
                                    stats.TotalMouseRightClickCount +
                                    stats.TotalMouseMiddleClickCount;

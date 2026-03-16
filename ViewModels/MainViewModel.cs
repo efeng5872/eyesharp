@@ -694,14 +694,17 @@ namespace eyesharp.ViewModels
                 await _configService.SaveConfigAsync(_config);
 
                 // 设置开机自启动
+                var exePath = AutoStartHelper.GetCurrentExecutablePath();
+                _logService.Info($"开机自启动设置：目标路径={exePath}");
+
                 var autoStartResult = AutoStartHelper.SetAutoStart(AutoStart);
                 if (autoStartResult)
                 {
-                    _logService.Info($"开机自启动已{(AutoStart ? "启用" : "禁用")}");
+                    _logService.Info($"开机自启动已{(AutoStart ? "启用" : "禁用")}，注册表路径={exePath}");
                 }
                 else
                 {
-                    _logService.Warn("开机自启动设置失败");
+                    _logService.Warn($"开机自启动设置失败，尝试写入的路径={exePath}");
                 }
 
                 if (restartTimer)

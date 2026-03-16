@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace eyesharp.Helpers
@@ -25,9 +26,10 @@ namespace eyesharp.Helpers
                 var value = key.GetValue(AppName);
                 if (value == null) return false;
 
-                // 检查路径是否匹配当前程序
+                // 检查路径是否匹配当前程序（去除可能的引号）
                 var currentPath = GetExecutablePath();
-                return value.ToString() == currentPath;
+                var registryPath = value.ToString()?.Trim('"') ?? string.Empty;
+                return string.Equals(registryPath, currentPath, StringComparison.OrdinalIgnoreCase);
             }
             catch (Exception)
             {
@@ -48,7 +50,9 @@ namespace eyesharp.Helpers
                 if (enable)
                 {
                     var exePath = GetExecutablePath();
-                    key.SetValue(AppName, exePath);
+                    // 路径包含空格时必须用引号包裹
+                    var registryValue = exePath.Contains(" ") ? $"\"{exePath}\"" : exePath;
+                    key.SetValue(AppName, registryValue);
                 }
                 else
                 {
@@ -64,18 +68,52 @@ namespace eyesharp.Helpers
         }
 
         /// <summary>
-        /// 获取当前可执行文件路径
+        /// 获取当前可执行文件路径（用于日志诊断）
+        /// </summary>
+        public static string GetCurrentExecutablePath()
+        {
+            return GetExecutablePath();
+        }
+
+        /// <summary>
+        /// 获取当前可执行文件路径（确保返回 .exe 路径）
         /// </summary>
         private static string GetExecutablePath()
         {
-            // .NET 8: 单文件发布场景优先使用进程路径
+            // 方案1：使用进程主模块路径（最可靠，适用于单文件发布）
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                var mainModulePath = process.MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(mainModulePath) &&
+                    mainModulePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    return mainModulePath;
+                }
+            }
+            catch
+            {
+                // 忽略异常，继续尝试其他方案
+            }
+
+            // 方案2：Environment.ProcessPath（可能返回 DLL 路径，需要修正）
             var processPath = Environment.ProcessPath;
             if (!string.IsNullOrWhiteSpace(processPath))
             {
+                // 单文件发布时，ProcessPath 可能指向临时目录中的 DLL
+                // 需要将 .dll 替换为 .exe
+                if (processPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    var exePath = processPath.Substring(0, processPath.Length - 4) + ".exe";
+                    if (File.Exists(exePath))
+                    {
+                        return exePath;
+                    }
+                }
                 return processPath;
             }
 
-            // 备选方案
+            // 方案3：备选方案
             return Path.Combine(AppContext.BaseDirectory, "eyesharp.exe");
         }
     }

@@ -118,6 +118,21 @@ namespace eyesharp
                     await usageStatsService.InitializeAsync();
                     logService?.Info("使用统计服务初始化完成");
 
+                    // 修复历史数据（异步执行，不阻塞启动）
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var now = DateTime.Now;
+                            var fixedCount = await usageStatsService.RepairHistoricalDataAsync(now.AddDays(-30), now);
+                            logService?.Info($"[App] 历史数据修复完成，修复了{fixedCount}条异常记录");
+                        }
+                        catch (Exception ex)
+                        {
+                            logService?.Error($"[App] 历史数据修复失败: {ex.Message}");
+                        }
+                    });
+
                     var usageStatsEnabled = _currentConfig.EnableUsageStatistics;
 
                     if (usageStatsEnabled)

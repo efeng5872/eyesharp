@@ -386,6 +386,17 @@ namespace eyesharp.Services.UsageStats
         }
 
         /// <summary>
+        /// 删除指定小时的小时记录（用于修复历史数据）
+        /// </summary>
+        public async Task DeleteHourlyRecordAsync(DateTime hour)
+        {
+            using var cmd = _connection!.CreateCommand();
+            cmd.CommandText = "DELETE FROM HourlyRecords WHERE Hour = @Hour;";
+            cmd.Parameters.AddWithValue("@Hour", hour.ToString("yyyy-MM-dd HH:mm:ss"));
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
         /// 映射小时记录
         /// </summary>
         private static HourlyActivityRecord MapHourlyRecord(SqliteDataReader reader)

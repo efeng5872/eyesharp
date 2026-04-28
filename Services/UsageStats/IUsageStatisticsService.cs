@@ -84,5 +84,15 @@ namespace eyesharp.Services.UsageStats
         /// 导出数据到CSV
         /// </summary>
         Task<string> ExportToCsvAsync(DateTime startDate, DateTime endDate);
+
+        /// <summary>
+        /// 修复历史数据中的跨日统计错误
+        /// 识别时长超过3600秒的小时记录，基于相邻记录的LastUpdateTime/FirstRecordTime推断锁屏时段，
+        /// 将超长时长按小时边界拆分并回填到中间空白小时
+        /// </summary>
+        /// <param name="startDate">修复起始日期</param>
+        /// <param name="endDate">修复结束日期</param>
+        /// <returns>修复的记录数量</returns>
+        Task<int> RepairHistoricalDataAsync(DateTime startDate, DateTime endDate);
     }
 }
